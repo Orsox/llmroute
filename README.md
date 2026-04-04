@@ -145,6 +145,16 @@ Deep defaults used in this project:
   - `ROUTER_LOG_MAX_BYTES`
   - `ROUTER_LOG_BACKUP_COUNT`
   - `ROUTER_TOOLUSE_SYSTEM_HINT`
+  - `ROUTER_DEBUG_THINKING` (`true|false`, default `false`)
+
+Thinking debug log markers (when `ROUTER_DEBUG_THINKING=true`):
+
+- `thinking_debug_request`
+- `thinking_debug_route_flags`
+- `thinking_debug_upstream_json`
+- `thinking_debug_upstream_stream`
+- `thinking_debug_upstream_anthropic_stream`
+- `thinking_debug_stream_first_chunk`
 
 ---
 
