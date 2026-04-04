@@ -383,9 +383,14 @@ def _payload_summary(payload: dict[str, Any]) -> str:
     msg_count = len(messages) if isinstance(messages, list) else 0
     has_tools = bool(payload.get("tools"))
     has_prompt = "prompt" in payload
+    has_thinking = "thinking" in payload
+    has_reasoning = "reasoning" in payload
+    reasoning = payload.get("reasoning")
+    reasoning_effort = reasoning.get("effort") if isinstance(reasoning, dict) else None
     return (
         f"model={model!r} stream={stream} max_tokens={max_tokens} "
-        f"messages={msg_count} tools={int(has_tools)} prompt={int(has_prompt)}"
+        f"messages={msg_count} tools={int(has_tools)} prompt={int(has_prompt)} "
+        f"thinking={int(has_thinking)} reasoning={int(has_reasoning)} reasoning_effort={reasoning_effort!r}"
     )
 
 
@@ -394,6 +399,47 @@ DEFAULT_TOOLUSE_SYSTEM_HINT = (
     "If you need external data or an action, call the appropriate tool. "
     "If no tool is needed, return a concise direct answer."
 )
+THINKING_DEBUG_ENV = "ROUTER_DEBUG_THINKING"
+
+
+def _thinking_debug_enabled() -> bool:
+    return _env_flag(THINKING_DEBUG_ENV, default=False)
+
+
+def _thinking_payload_probe(payload: dict[str, Any]) -> str:
+    def _safe_get(container: Any, key: str) -> Any:
+        if isinstance(container, dict):
+            return container.get(key)
+        return None
+
+    reasoning = payload.get("reasoning")
+    chat_kwargs = payload.get("chat_template_kwargs")
+    extra_body = payload.get("extra_body")
+    options = payload.get("options")
+    probe = {
+        "keys": sorted([k for k in payload.keys() if k in {"thinking", "reasoning", "chat_template_kwargs", "extra_body", "options"}]),
+        "thinking": payload.get("thinking"),
+        "reasoning_effort": reasoning.get("effort") if isinstance(reasoning, dict) else None,
+        "chat_template_enable_thinking": _safe_get(chat_kwargs, "enable_thinking"),
+        "extra_body_thinking": _safe_get(extra_body, "thinking"),
+        "extra_body_reasoning": _safe_get(extra_body, "reasoning"),
+        "options_thinking": _safe_get(options, "thinking"),
+    }
+    return json.dumps(probe, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+
+
+def _stream_chunk_thinking_hint(chunk: bytes) -> str:
+    text = chunk.decode("utf-8", errors="ignore").lower()[:600]
+    markers: list[str] = []
+    if "<think" in text:
+        markers.append("xml_think_tag")
+    if "reasoning_content" in text:
+        markers.append("reasoning_content_field")
+    if '"reasoning"' in text:
+        markers.append("reasoning_field")
+    if '"thinking"' in text:
+        markers.append("thinking_field")
+    return ",".join(markers) if markers else "none"
 
 
 def _extract_text_and_vision(content: Any) -> tuple[str, bool]:
@@ -1453,6 +1499,9 @@ class RouterService:
     async def choose_route(self, cfg: RouterConfig, req: UnifiedRequest) -> RouteDecision:
         candidates = self._eligible_aliases(cfg, req)
         is_coding = self._is_coding_request(req)
+        is_commit_task = self._is_commit_message_task(req)
+        is_no_thinking_task = self._is_no_thinking_task(req)
+        is_file_search = self._is_file_search_request(req)
         logger.info(
             "route_eval_start source=%s requested_model=%r stream=%s required_caps=%s candidates=%s est_total_tokens=%s is_coding=%s",
             req.source_api,
@@ -1463,6 +1512,15 @@ class RouterService:
             req.estimated_total_tokens,
             is_coding,
         )
+        if _thinking_debug_enabled():
+            logger.info(
+                "thinking_debug_route_flags source=%s commit_task=%s no_thinking_task=%s file_search=%s needs_tooluse=%s",
+                req.source_api,
+                int(is_commit_task),
+                int(is_no_thinking_task),
+                int(is_file_search),
+                int(req.needs_tooluse),
+            )
         if not candidates:
             logger.warning(
                 "route_eval_no_candidates required_caps=%s est_total_tokens=%s",
@@ -1482,11 +1540,11 @@ class RouterService:
             preferred_alias = self._find_alias_by_model_id(cfg, req.requested_model)
 
         small_policy_reason: Optional[str] = None
-        if self._is_commit_message_task(req) and "small" in candidates:
+        if is_commit_task and "small" in candidates:
             small_policy_reason = "policy_commit_message_small"
         elif req.needs_tooluse and "small" in candidates:
             small_policy_reason = "policy_tooluse_small"
-        elif self._is_file_search_request(req) and "small" in candidates:
+        elif is_file_search and "small" in candidates:
             small_policy_reason = "policy_file_search_small"
 
         if small_policy_reason:
@@ -1618,16 +1676,32 @@ class RouterService:
         logger.info("upstream_json_attempt_order path=%s order=%s", path, order)
         for idx, alias in enumerate(order):
             settings = self._upstream_for_alias(cfg, alias)
-            payload = dict(base_payload)
-            payload["model"] = cfg.models[alias].model_id
-            payload = self._normalize_commit_message_payload(path, payload, decision)
+            payload_raw = dict(base_payload)
+            payload_raw["model"] = cfg.models[alias].model_id
+            payload_after_commit = self._normalize_commit_message_payload(path, payload_raw, decision)
             thinking_enabled = (
                 decision.thinking_requested
                 and not decision.needs_tooluse
                 and cfg.models[alias].supports_thinking
             )
-            payload = self._normalize_thinking_param(settings, path, payload, thinking_enabled)
+            payload_after_thinking = self._normalize_thinking_param(
+                settings, path, payload_after_commit, thinking_enabled
+            )
+            payload = payload_after_thinking
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
+            if _thinking_debug_enabled():
+                logger.info(
+                    "thinking_debug_upstream_json path=%s alias=%s provider=%s decision_thinking=%s applied_thinking=%s raw=%s after_commit=%s after_thinking=%s final=%s",
+                    path,
+                    alias,
+                    settings.provider,
+                    int(decision.thinking_requested),
+                    int(thinking_enabled),
+                    _thinking_payload_probe(payload_raw),
+                    _thinking_payload_probe(payload_after_commit),
+                    _thinking_payload_probe(payload_after_thinking),
+                    _thinking_payload_probe(payload),
+                )
             logger.info(
                 "upstream_json_attempt path=%s alias=%s model=%s thinking=%s attempt=%s/%s",
                 path,
@@ -1674,16 +1748,32 @@ class RouterService:
         logger.info("upstream_stream_attempt_order path=%s order=%s", path, order)
         for idx, alias in enumerate(order):
             settings = self._upstream_for_alias(cfg, alias)
-            payload = dict(base_payload)
-            payload["model"] = cfg.models[alias].model_id
-            payload = self._normalize_commit_message_payload(path, payload, decision)
+            payload_raw = dict(base_payload)
+            payload_raw["model"] = cfg.models[alias].model_id
+            payload_after_commit = self._normalize_commit_message_payload(path, payload_raw, decision)
             thinking_enabled = (
                 decision.thinking_requested
                 and not decision.needs_tooluse
                 and cfg.models[alias].supports_thinking
             )
-            payload = self._normalize_thinking_param(settings, path, payload, thinking_enabled)
+            payload_after_thinking = self._normalize_thinking_param(
+                settings, path, payload_after_commit, thinking_enabled
+            )
+            payload = payload_after_thinking
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
+            if _thinking_debug_enabled():
+                logger.info(
+                    "thinking_debug_upstream_stream path=%s alias=%s provider=%s decision_thinking=%s applied_thinking=%s raw=%s after_commit=%s after_thinking=%s final=%s",
+                    path,
+                    alias,
+                    settings.provider,
+                    int(decision.thinking_requested),
+                    int(thinking_enabled),
+                    _thinking_payload_probe(payload_raw),
+                    _thinking_payload_probe(payload_after_commit),
+                    _thinking_payload_probe(payload_after_thinking),
+                    _thinking_payload_probe(payload),
+                )
             logger.info(
                 "upstream_stream_attempt path=%s alias=%s model=%s thinking=%s attempt=%s/%s",
                 path,
@@ -1696,6 +1786,14 @@ class RouterService:
             stream_gen = self.lm_client.stream_openai(settings, path, payload)
             try:
                 first_chunk = await stream_gen.__anext__()
+                if _thinking_debug_enabled():
+                    logger.info(
+                        "thinking_debug_stream_first_chunk path=%s alias=%s hint=%s chunk_bytes=%s",
+                        path,
+                        alias,
+                        _stream_chunk_thinking_hint(first_chunk),
+                        len(first_chunk),
+                    )
             except StopAsyncIteration:
                 async def empty_gen() -> AsyncIterator[bytes]:
                     if False:
@@ -1753,16 +1851,32 @@ class RouterService:
 
         for idx, alias in enumerate(order):
             settings = self._upstream_for_alias(cfg, alias)
-            payload = dict(base_payload)
-            payload["model"] = cfg.models[alias].model_id
-            payload = self._normalize_commit_message_payload(path, payload, decision)
+            payload_raw = dict(base_payload)
+            payload_raw["model"] = cfg.models[alias].model_id
+            payload_after_commit = self._normalize_commit_message_payload(path, payload_raw, decision)
             thinking_enabled = (
                 decision.thinking_requested
                 and not decision.needs_tooluse
                 and cfg.models[alias].supports_thinking
             )
-            payload = self._normalize_thinking_param(settings, path, payload, thinking_enabled)
+            payload_after_thinking = self._normalize_thinking_param(
+                settings, path, payload_after_commit, thinking_enabled
+            )
+            payload = payload_after_thinking
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
+            if _thinking_debug_enabled():
+                logger.info(
+                    "thinking_debug_upstream_anthropic_stream path=%s alias=%s provider=%s decision_thinking=%s applied_thinking=%s raw=%s after_commit=%s after_thinking=%s final=%s",
+                    path,
+                    alias,
+                    settings.provider,
+                    int(decision.thinking_requested),
+                    int(thinking_enabled),
+                    _thinking_payload_probe(payload_raw),
+                    _thinking_payload_probe(payload_after_commit),
+                    _thinking_payload_probe(payload_after_thinking),
+                    _thinking_payload_probe(payload),
+                )
             logger.info(
                 "anthropic_stream_semantic_attempt path=%s alias=%s model=%s thinking=%s attempt=%s/%s",
                 path,
@@ -3118,6 +3232,8 @@ def create_app(
         await require_auth(request)
         payload = await request.json()
         logger.info("request_payload source=openai_chat %s", _payload_summary(payload))
+        if _thinking_debug_enabled():
+            logger.info("thinking_debug_request source=openai_chat probe=%s", _thinking_payload_probe(payload))
         decision, alias, used_fallback, result = await service.handle_openai_chat(payload)
         cfg = store.get_config()
         headers = _route_headers(cfg, decision, alias, used_fallback)
@@ -3144,6 +3260,8 @@ def create_app(
         await require_auth(request)
         payload = await request.json()
         logger.info("request_payload source=anthropic_messages %s", _payload_summary(payload))
+        if _thinking_debug_enabled():
+            logger.info("thinking_debug_request source=anthropic_messages probe=%s", _thinking_payload_probe(payload))
         decision, alias, used_fallback, is_stream, result = await service.handle_anthropic_messages(payload)
         cfg = store.get_config()
         headers = _route_headers(cfg, decision, alias, used_fallback)
