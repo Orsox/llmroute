@@ -1,0 +1,66 @@
+server:
+  host: 0.0.0.0
+  port: 12345
+upstreams:
+  local:
+    provider: lm_studio
+    base_url: http://127.0.0.1:1234
+    timeout_seconds: 120.0
+    api_key: null
+    api_key_env: OPENAI_API_KEY
+    organization: null
+    project: null
+  deep:
+    provider: openai
+    base_url: https://api.openai.com
+    timeout_seconds: 180.0
+    api_key: null
+    api_key_env: DEEP_API_KEY
+    organization: null
+    project: null
+security:
+  shared_bearer_token: null
+routing:
+  judge_timeout_seconds: 15.0
+  fallback_enabled: true
+  hybrid_client_model_override: true
+  heuristics:
+    large_prompt_token_threshold: 2200
+    large_max_tokens_threshold: 1800
+    judge_temperature: 0.0
+    judge_max_tokens: 512
+    judge_prompt_context_chars: 6000
+router_identity:
+  exposed_model_name: borg-cpu
+  publish_underlying_models: true
+models:
+  small:
+    model_id: qwen/qwen3.5-9b
+    context_window: 32786
+    capabilities:
+    - chat
+    - completions
+    - vision
+    upstream_ref: local
+    relative_speed: 3.0
+    suitable_for: Fast routing judge, low latency chat, multimodal light tasks.
+  large:
+    model_id: qwen3-coder-next-ream
+    context_window: 262144
+    capabilities:
+    - chat
+    - completions
+    - tooluse
+    upstream_ref: local
+    relative_speed: 1.0
+    suitable_for: Higher complexity reasoning and long-context workloads.
+  deep:
+    model_id: gpt-5.4-mini
+    context_window: 400000
+    capabilities:
+    - chat
+    - completions
+    - tooluse
+    upstream_ref: deep
+    relative_speed: 0.8
+    suitable_for: High-stakes reasoning and strict rule/compliance tasks.
