@@ -93,6 +93,7 @@ Behavior highlights:
 - capability and context window checks are applied before final selection
 - `DEEP_ENABLED=true` is required for `deep` routing
 - `x-router-selected-model` always shows the effective target model
+- `x-router-thinking-requested` / `x-router-thinking-applied` expose thinking decision vs applied mode
 
 ---
 
@@ -125,6 +126,7 @@ Important knobs:
 - `routing.heuristics.*` for judge tuning
 - `router_identity.exposed_model_name` (default `borg-cpu`)
 - `models.<alias>.upstream_ref` for per-model upstream mapping
+- `models.<alias>.supports_thinking` to mark if a model can run with thinking enabled
 
 Deep defaults used in this project:
 
@@ -208,4 +210,3 @@ Artifacts:
   - `Beenden`
 - Windows startup toggle is available in `/admin`
 - startup uses `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and launches `scripts/start_llm_router.ps1`
-

@@ -41,7 +41,9 @@ models:
     - chat
     - completions
     - vision
+    - tooluse
     upstream_ref: local
+    supports_thinking: true
     relative_speed: 3.0
     suitable_for: Fast routing judge, low latency chat, multimodal light tasks.
   large:
@@ -52,6 +54,7 @@ models:
     - completions
     - tooluse
     upstream_ref: local
+    supports_thinking: false
     relative_speed: 1.0
     suitable_for: Higher complexity reasoning and long-context workloads.
   deep:
@@ -62,5 +65,6 @@ models:
     - completions
     - tooluse
     upstream_ref: deep
+    supports_thinking: true
     relative_speed: 0.8
     suitable_for: High-stakes reasoning and strict rule/compliance tasks.

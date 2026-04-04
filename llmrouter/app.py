@@ -93,6 +93,33 @@ CODING_TOPIC_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+FILE_SEARCH_RE = re.compile(
+    r"\b("
+    r"datei|dateien|file|files|file search|find file|find files|"
+    r"suche nach dateien|dateisuche|datei suchen|"
+    r"pfad|paths?|verzeichnis|ordner|directory|directories|"
+    r"grep|ripgrep|rg|glob|filename|filenames"
+    r")\b",
+    re.IGNORECASE,
+)
+COMMIT_MESSAGE_TASK_RE = re.compile(
+    r"\b("
+    r"commit message|git commit|commit-msg|conventional commit|"
+    r"commit titel|commit title|commit text|"
+    r"schreibe.*commit|generiere.*commit"
+    r")\b",
+    re.IGNORECASE,
+)
+NO_THINKING_TASK_RE = re.compile(
+    r"\b("
+    r"commit message|git commit|commit-msg|"
+    r"changelog|release notes?|"
+    r"pull request title|pr title|pr description|merge request|"
+    r"zusammenfassen|summary|summarize|"
+    r"kurzfassung|kurz zusammenfassen"
+    r")\b",
+    re.IGNORECASE,
+)
 DEEP_REASONING_RE = re.compile(
     r"\b("
     r"architecture|architektur|trade[- ]?off|abw[aä]gung|compliance|policy|regelwerk|"
@@ -171,6 +198,7 @@ class ModelProfile(BaseModel):
     context_window: int
     capabilities: list[str]
     upstream_ref: str = "local"
+    supports_thinking: bool = False
     relative_speed: float = 1.0
     suitable_for: str = ""
 
@@ -321,6 +349,7 @@ def _default_config() -> dict[str, Any]:
                 "context_window": 32996,
                 "capabilities": ["chat", "completions", "vision", "tooluse"],
                 "upstream_ref": "local",
+                "supports_thinking": True,
                 "relative_speed": 3.0,
                 "suitable_for": "Fast routing judge, low latency chat, multimodal light tasks.",
             },
@@ -329,6 +358,7 @@ def _default_config() -> dict[str, Any]:
                 "context_window": 262144,
                 "capabilities": ["chat", "completions", "tooluse"],
                 "upstream_ref": "local",
+                "supports_thinking": False,
                 "relative_speed": 1.0,
                 "suitable_for": "Higher complexity reasoning and long-context workloads.",
             },
@@ -337,6 +367,7 @@ def _default_config() -> dict[str, Any]:
                 "context_window": 400000,
                 "capabilities": ["chat", "completions", "tooluse"],
                 "upstream_ref": "deep",
+                "supports_thinking": True,
                 "relative_speed": 0.5,
                 "suitable_for": "High-stakes reasoning and strict rule/compliance tasks.",
             },
@@ -550,6 +581,8 @@ class RouteDecision:
     selected_alias: str
     reason: str
     candidate_aliases: list[str]
+    thinking_requested: bool = False
+    is_commit_message_task: bool = False
     judge_model_id: Optional[str] = None
     is_coding_request: bool = False
     source_api: str = "unknown"
@@ -1091,6 +1124,7 @@ class RouterService:
         selected_alias: str,
         reason: str,
         candidates: list[str],
+        thinking_requested: bool,
         judge_model_id: Optional[str],
         is_coding: bool,
     ) -> RouteDecision:
@@ -1098,6 +1132,8 @@ class RouterService:
             selected_alias=selected_alias,
             reason=reason,
             candidate_aliases=candidates,
+            thinking_requested=thinking_requested,
+            is_commit_message_task=self._is_commit_message_task(req),
             judge_model_id=judge_model_id,
             is_coding_request=is_coding,
             source_api=req.source_api,
@@ -1136,6 +1172,76 @@ class RouterService:
         normalized.pop("max_tokens", None)
         return normalized
 
+    @staticmethod
+    def _normalize_thinking_param(
+        settings: LMStudioSettings,
+        path: str,
+        payload: dict[str, Any],
+        thinking_enabled: bool,
+    ) -> dict[str, Any]:
+        normalized = dict(payload)
+        if path != "/v1/chat/completions":
+            if not thinking_enabled:
+                normalized.pop("reasoning", None)
+                normalized.pop("thinking", None)
+            return normalized
+
+        if not thinking_enabled:
+            normalized.pop("reasoning", None)
+            normalized.pop("thinking", None)
+            return normalized
+
+        if settings.provider == "openai":
+            reasoning = normalized.get("reasoning")
+            if isinstance(reasoning, dict):
+                effort = str(reasoning.get("effort") or "").strip()
+                if not effort:
+                    reasoning["effort"] = "medium"
+            else:
+                normalized["reasoning"] = {"effort": "medium"}
+        return normalized
+
+    @staticmethod
+    def _normalize_commit_message_payload(
+        path: str,
+        payload: dict[str, Any],
+        decision: RouteDecision,
+    ) -> dict[str, Any]:
+        if not decision.is_commit_message_task or path != "/v1/chat/completions":
+            return payload
+
+        normalized = dict(payload)
+        token_cap = 160
+        if "max_completion_tokens" in normalized:
+            try:
+                if int(normalized["max_completion_tokens"]) > token_cap:
+                    normalized["max_completion_tokens"] = token_cap
+            except Exception:  # noqa: BLE001
+                normalized["max_completion_tokens"] = token_cap
+        elif "max_tokens" in normalized:
+            try:
+                if int(normalized["max_tokens"]) > token_cap:
+                    normalized["max_tokens"] = token_cap
+            except Exception:  # noqa: BLE001
+                normalized["max_tokens"] = token_cap
+        else:
+            normalized["max_completion_tokens"] = token_cap
+
+        hint = (
+            "You are writing a git commit message. "
+            "Return only the final commit message text, concise, no explanation."
+        )
+        messages = normalized.get("messages")
+        if isinstance(messages, list):
+            if messages and isinstance(messages[0], dict) and messages[0].get("role") == "system":
+                current = str(messages[0].get("content") or "")
+                if hint not in current:
+                    sep = "\n\n" if current else ""
+                    messages[0]["content"] = f"{current}{sep}{hint}"
+            else:
+                messages.insert(0, {"role": "system", "content": hint})
+        return normalized
+
     def _eligible_aliases(self, cfg: RouterConfig, req: UnifiedRequest) -> list[str]:
         required = req.required_capabilities
         total_tokens = req.estimated_total_tokens
@@ -1170,12 +1276,48 @@ class RouterService:
             return True
         return bool(CODING_TOPIC_RE.search(text))
 
-    async def _judge_alias(self, cfg: RouterConfig, req: UnifiedRequest, candidates: Iterable[str]) -> Optional[str]:
+    @staticmethod
+    def _is_file_search_request(req: UnifiedRequest) -> bool:
+        text = (req.latest_user_prompt_text or req.user_prompt_text or req.prompt_text or "").strip()
+        if not text:
+            return False
+        return bool(FILE_SEARCH_RE.search(text))
+
+    @staticmethod
+    def _is_commit_message_task(req: UnifiedRequest) -> bool:
+        text = (req.latest_user_prompt_text or req.user_prompt_text or req.prompt_text or "").strip()
+        if not text:
+            return False
+        return bool(COMMIT_MESSAGE_TASK_RE.search(text))
+
+    @staticmethod
+    def _is_no_thinking_task(req: UnifiedRequest) -> bool:
+        text = (req.latest_user_prompt_text or req.user_prompt_text or req.prompt_text or "").strip()
+        if not text:
+            return False
+        return bool(NO_THINKING_TASK_RE.search(text))
+
+    def _heuristic_thinking_requested(
+        self,
+        cfg: RouterConfig,
+        req: UnifiedRequest,
+        selected_alias: str,
+    ) -> bool:
+        if req.needs_tooluse or self._is_no_thinking_task(req):
+            return False
+        profile = cfg.models[selected_alias]
+        if not profile.supports_thinking:
+            return False
+        return self._is_deep_reasoning_request(req)
+
+    async def _judge_alias(
+        self, cfg: RouterConfig, req: UnifiedRequest, candidates: Iterable[str]
+    ) -> tuple[Optional[str], Optional[bool]]:
         judge_alias = "small"
         judge_model = cfg.models[judge_alias].model_id
         candidate_list = list(candidates)
         if len(candidate_list) <= 1:
-            return candidate_list[0] if candidate_list else None
+            return candidate_list[0] if candidate_list else None, None
         logger.info(
             "judge_start candidates=%s requested_model=%r est_input_tokens=%s est_total_tokens=%s",
             candidate_list,
@@ -1188,7 +1330,10 @@ class RouterService:
         latest_user_excerpt = latest_user_text[:context_chars]
         recent_user_context = (req.user_prompt_text or req.prompt_text or "")[-context_chars:]
         judge_prompt = {
-            "instruction": "Return only JSON: {\"route\":\"small|large|deep\",\"reason_code\":\"short_code\"}.",
+            "instruction": (
+                "Return only JSON: "
+                "{\"route\":\"small|large|deep\",\"thinking\":\"on|off\",\"reason_code\":\"short_code\"}."
+            ),
             "features": {
                 "source_api": req.source_api,
                 "estimated_input_tokens": req.estimated_input_tokens,
@@ -1211,6 +1356,11 @@ class RouterService:
                 "Do not choose deep solely because prompt/max_tokens are large.",
                 "Choose deep only for clear multi-step reasoning, strict rule compliance or high-risk decisions.",
                 "Choose large only when the latest user ask clearly requires stronger coding/programming depth.",
+                "Set thinking=on only if the selected route supports thinking and the task clearly benefits from it.",
+                "Never set thinking=on when tools/tool-use are required.",
+                "Set thinking=off for lightweight text tasks like commit messages, PR titles/descriptions, changelogs, or summaries.",
+                "Prefer small for tool-use flows when available.",
+                "Prefer small for file search / file lookup tasks when available.",
             ],
             "policy": "Prefer small by default. Use large for regular coding tasks. Use deep only for explicitly complex/high-stakes reasoning.",
             "preference": "Prefer small by default.",
@@ -1237,27 +1387,36 @@ class RouterService:
             response = await self.lm_client.post_json(judge_settings, "/v1/chat/completions", payload)
         except Exception as exc:  # noqa: BLE001
             logger.warning("judge_failed error=%s", exc)
-            return None
+            return None, None
 
         text = _extract_assistant_text(response).strip()
         if not text:
             logger.warning("judge_empty_response")
-            return None
+            return None, None
 
         route = None
+        thinking_requested: Optional[bool] = None
         try:
             parsed = json.loads(text)
             route = parsed.get("route")
+            thinking_raw = str(parsed.get("thinking") or "").strip().lower()
+            if thinking_raw in {"on", "true", "1"}:
+                thinking_requested = True
+            elif thinking_raw in {"off", "false", "0"}:
+                thinking_requested = False
         except json.JSONDecodeError:
             match = re.search(r"\b(small|large|deep)\b", text.lower())
             if match:
                 route = match.group(1)
+            think_match = re.search(r"\b(on|off)\b", text.lower())
+            if think_match:
+                thinking_requested = think_match.group(1) == "on"
 
         if route in candidate_list:
-            logger.info("judge_result route=%s", route)
-            return route
+            logger.info("judge_result route=%s thinking=%s", route, thinking_requested)
+            return route, thinking_requested
         logger.warning("judge_unusable_response text=%s", text[:200])
-        return None
+        return None, None
 
     def _heuristic_alias(self, cfg: RouterConfig, req: UnifiedRequest, candidates: list[str]) -> str:
         if len(candidates) == 1:
@@ -1322,19 +1481,42 @@ class RouterService:
         if not self._is_router_public_model_name(cfg, req.requested_model):
             preferred_alias = self._find_alias_by_model_id(cfg, req.requested_model)
 
-        if len(candidates) == 1:
+        small_policy_reason: Optional[str] = None
+        if self._is_commit_message_task(req) and "small" in candidates:
+            small_policy_reason = "policy_commit_message_small"
+        elif req.needs_tooluse and "small" in candidates:
+            small_policy_reason = "policy_tooluse_small"
+        elif self._is_file_search_request(req) and "small" in candidates:
+            small_policy_reason = "policy_file_search_small"
+
+        if small_policy_reason:
             decision = self._make_route_decision(
                 req=req,
-                selected_alias=candidates[0],
-                reason="constraint_single_candidate",
+                selected_alias="small",
+                reason=small_policy_reason,
                 candidates=candidates,
+                thinking_requested=self._heuristic_thinking_requested(cfg, req, "small"),
                 judge_model_id=cfg.models["small"].model_id,
                 is_coding=is_coding,
             )
             logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
             return decision
 
-        judge_alias = await self._judge_alias(cfg, req, candidates)
+        if len(candidates) == 1:
+            selected = candidates[0]
+            decision = self._make_route_decision(
+                req=req,
+                selected_alias=selected,
+                reason="constraint_single_candidate",
+                candidates=candidates,
+                thinking_requested=self._heuristic_thinking_requested(cfg, req, selected),
+                judge_model_id=cfg.models["small"].model_id,
+                is_coding=is_coding,
+            )
+            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
+            return decision
+
+        judge_alias, judge_thinking_requested = await self._judge_alias(cfg, req, candidates)
         if judge_alias and judge_alias in candidates:
             selected = judge_alias
             reason = f"judge_{judge_alias}"
@@ -1347,11 +1529,22 @@ class RouterService:
                 selected = preferred
                 reason = "client_model_preference"
 
+            thinking_requested = (
+                judge_thinking_requested
+                if judge_thinking_requested is not None
+                else self._heuristic_thinking_requested(cfg, req, selected)
+            )
+            if req.needs_tooluse or self._is_no_thinking_task(req):
+                thinking_requested = False
+            if thinking_requested and not cfg.models[selected].supports_thinking:
+                thinking_requested = False
+
             decision = self._make_route_decision(
                 req=req,
                 selected_alias=selected,
                 reason=reason,
                 candidates=candidates,
+                thinking_requested=thinking_requested,
                 judge_model_id=cfg.models["small"].model_id,
                 is_coding=is_coding,
             )
@@ -1367,6 +1560,7 @@ class RouterService:
                 selected_alias=preferred_when_judge_unavailable,
                 reason="client_model_preference_judge_unavailable",
                 candidates=candidates,
+                thinking_requested=self._heuristic_thinking_requested(cfg, req, preferred_when_judge_unavailable),
                 judge_model_id=cfg.models["small"].model_id,
                 is_coding=is_coding,
             )
@@ -1379,6 +1573,7 @@ class RouterService:
                 selected_alias="small",
                 reason="judge_unavailable_default_small",
                 candidates=candidates,
+                thinking_requested=self._heuristic_thinking_requested(cfg, req, "small"),
                 judge_model_id=cfg.models["small"].model_id,
                 is_coding=is_coding,
             )
@@ -1391,6 +1586,7 @@ class RouterService:
             selected_alias=heur_alias,
             reason="heuristic_fallback",
             candidates=candidates,
+            thinking_requested=self._heuristic_thinking_requested(cfg, req, heur_alias),
             judge_model_id=cfg.models["small"].model_id,
             is_coding=is_coding,
         )
@@ -1424,12 +1620,20 @@ class RouterService:
             settings = self._upstream_for_alias(cfg, alias)
             payload = dict(base_payload)
             payload["model"] = cfg.models[alias].model_id
+            payload = self._normalize_commit_message_payload(path, payload, decision)
+            thinking_enabled = (
+                decision.thinking_requested
+                and not decision.needs_tooluse
+                and cfg.models[alias].supports_thinking
+            )
+            payload = self._normalize_thinking_param(settings, path, payload, thinking_enabled)
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
             logger.info(
-                "upstream_json_attempt path=%s alias=%s model=%s attempt=%s/%s",
+                "upstream_json_attempt path=%s alias=%s model=%s thinking=%s attempt=%s/%s",
                 path,
                 alias,
                 cfg.models[alias].model_id,
+                int(thinking_enabled),
                 idx + 1,
                 len(order),
             )
@@ -1472,12 +1676,20 @@ class RouterService:
             settings = self._upstream_for_alias(cfg, alias)
             payload = dict(base_payload)
             payload["model"] = cfg.models[alias].model_id
+            payload = self._normalize_commit_message_payload(path, payload, decision)
+            thinking_enabled = (
+                decision.thinking_requested
+                and not decision.needs_tooluse
+                and cfg.models[alias].supports_thinking
+            )
+            payload = self._normalize_thinking_param(settings, path, payload, thinking_enabled)
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
             logger.info(
-                "upstream_stream_attempt path=%s alias=%s model=%s attempt=%s/%s",
+                "upstream_stream_attempt path=%s alias=%s model=%s thinking=%s attempt=%s/%s",
                 path,
                 alias,
                 cfg.models[alias].model_id,
+                int(thinking_enabled),
                 idx + 1,
                 len(order),
             )
@@ -1543,12 +1755,20 @@ class RouterService:
             settings = self._upstream_for_alias(cfg, alias)
             payload = dict(base_payload)
             payload["model"] = cfg.models[alias].model_id
+            payload = self._normalize_commit_message_payload(path, payload, decision)
+            thinking_enabled = (
+                decision.thinking_requested
+                and not decision.needs_tooluse
+                and cfg.models[alias].supports_thinking
+            )
+            payload = self._normalize_thinking_param(settings, path, payload, thinking_enabled)
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
             logger.info(
-                "anthropic_stream_semantic_attempt path=%s alias=%s model=%s attempt=%s/%s",
+                "anthropic_stream_semantic_attempt path=%s alias=%s model=%s thinking=%s attempt=%s/%s",
                 path,
                 alias,
                 cfg.models[alias].model_id,
+                int(thinking_enabled),
                 idx + 1,
                 len(order),
             )
@@ -2197,11 +2417,18 @@ async def translate_openai_stream_to_anthropic(
 
 
 def _route_headers(cfg: RouterConfig, decision: RouteDecision, final_alias: str, used_fallback: bool) -> dict[str, str]:
+    thinking_applied = (
+        decision.thinking_requested
+        and not decision.needs_tooluse
+        and cfg.models[final_alias].supports_thinking
+    )
     return {
         "x-router-selected-model": cfg.models[final_alias].model_id,
         "x-router-judge-model": decision.judge_model_id or "none",
         "x-router-reason": decision.reason,
         "x-router-fallback": "1" if used_fallback else "0",
+        "x-router-thinking-requested": "1" if decision.thinking_requested else "0",
+        "x-router-thinking-applied": "1" if thinking_applied else "0",
     }
 
 
@@ -2233,6 +2460,12 @@ def _log_route_analytics(
         "needs_tooluse": decision.needs_tooluse,
         "is_coding": decision.is_coding_request,
         "repetition_key": decision.repetition_key,
+        "thinking_requested": decision.thinking_requested,
+        "thinking_applied": (
+            decision.thinking_requested
+            and not decision.needs_tooluse
+            and cfg.models[final_alias].supports_thinking
+        ),
     }
     logger.info("route_analytics %s", json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
 
@@ -3093,10 +3326,12 @@ def run_with_tray(app_instance: FastAPI) -> None:
     except ImportError as exc:  # pragma: no cover - optional dependency
         raise RuntimeError("Tray mode requires pystray and pillow. Install with: pip install -r requirements.txt") from exc
 
-    runtime_cfg = app_instance.state.config_store.get_config()
-    base_url = _admin_base_url(runtime_cfg.server.host, runtime_cfg.server.port)
-    admin_url = f"{base_url}/admin"
-    status_url = f"{base_url}/admin/status"
+    config_store = app_instance.state.config_store
+
+    def current_urls() -> tuple[str, str, str]:
+        runtime_cfg = config_store.get_config()
+        base_url = _admin_base_url(runtime_cfg.server.host, runtime_cfg.server.port)
+        return base_url, f"{base_url}/admin", f"{base_url}/admin/status"
 
     controller = RouterServerController(app_instance)
     controller.start()
@@ -3105,6 +3340,7 @@ def run_with_tray(app_instance: FastAPI) -> None:
     shutdown_event = threading.Event()
 
     def status_text() -> str:
+        base_url, _, _ = current_urls()
         if controller.is_running():
             return f"Status: Running ({base_url})"
         if controller.is_starting():
@@ -3120,17 +3356,24 @@ def run_with_tray(app_instance: FastAPI) -> None:
         icon.update_menu()
 
     def on_open_admin(_icon, _item) -> None:
+        _, admin_url, _ = current_urls()
         webbrowser.open(admin_url, new=2)
 
     def on_open_health(_icon, _item) -> None:
+        _, _, status_url = current_urls()
         webbrowser.open(status_url, new=2)
 
-    def on_start(_icon, _item) -> None:
-        controller.start()
-        refresh_visuals()
-
-    def on_stop(_icon, _item) -> None:
+    def on_restart(_icon, _item) -> None:
+        old_cfg = config_store.get_config()
         controller.stop()
+        try:
+            config_store._config = config_store._load_from_disk()
+            logger.info("tray_restart_config_reloaded")
+        except Exception as exc:  # noqa: BLE001
+            config_store._config = old_cfg
+            controller.last_error = f"Config reload failed: {exc}"
+            logger.exception("tray_restart_config_reload_failed error=%s", exc)
+        controller.start()
         refresh_visuals()
 
     def on_quit(_icon, _item) -> None:
@@ -3143,9 +3386,7 @@ def run_with_tray(app_instance: FastAPI) -> None:
         pystray.MenuItem("Settings oeffnen", on_open_admin),
         pystray.MenuItem("Status oeffnen", on_open_health),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Router starten", on_start, enabled=lambda _item: not controller.is_running()),
-        pystray.MenuItem("Router stoppen", on_stop, enabled=lambda _item: controller.is_running()),
-        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Router neu starten", on_restart),
         pystray.MenuItem("Beenden", on_quit),
     )
 

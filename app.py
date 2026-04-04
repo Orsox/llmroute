@@ -3035,6 +3035,17 @@ def run_with_tray(app_instance: FastAPI) -> None:
         controller.stop()
         refresh_visuals()
 
+    def on_restart(_icon, _item) -> None:
+        """
+        Stoppt den Router, reloadet die ConfigStore vom Disk, und startet neu.
+        Wird verwendet nach `/admin/config` PUT oder manuellen Dateiänderungen.
+        """
+        controller.stop()
+        config_store = app_instance.state.config_store
+        config_store._config = config_store._load_from_disk()
+        controller.start()
+        refresh_visuals()
+
     def on_quit(_icon, _item) -> None:
         shutdown_event.set()
         controller.stop()
@@ -3048,6 +3059,7 @@ def run_with_tray(app_instance: FastAPI) -> None:
         pystray.MenuItem("Router starten", on_start, enabled=lambda _item: not controller.is_running()),
         pystray.MenuItem("Router stoppen", on_stop, enabled=lambda _item: controller.is_running()),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Router neustarten", on_restart, enabled=lambda _item: controller.is_running()),
         pystray.MenuItem("Beenden", on_quit),
     )
 
