@@ -18,7 +18,12 @@ from llmrouter.app import (
 )
 
 
-def _write_config(path: Path, token: str | None = None, small_context: int = 32996) -> None:
+def _write_config(
+    path: Path,
+    token: str | None = None,
+    small_context: int = 32996,
+    default_temperature: float | None = None,
+) -> None:
     data = {
         "server": {
             "host": "0.0.0.0",
@@ -51,6 +56,7 @@ def _write_config(path: Path, token: str | None = None, small_context: int = 329
             "judge_timeout_seconds": 5,
             "fallback_enabled": True,
             "hybrid_client_model_override": True,
+            "default_temperature": default_temperature,
             "heuristics": {
                 "large_prompt_token_threshold": 1200,
                 "large_max_tokens_threshold": 700,
@@ -151,6 +157,16 @@ class FakeLMClient:
         yield b'data: {"choices":[{"delta":{"content":"hello"},"finish_reason":null}]}' + b"\n\n"
         yield b'data: {"choices":[{"delta":{"content":" world"},"finish_reason":"stop"}]}' + b"\n\n"
         yield b"data: [DONE]\n\n"
+
+
+class CapturePayloadLMClient(FakeLMClient):
+    def __init__(self):
+        super().__init__()
+        self.last_payload: dict | None = None
+
+    async def post_json(self, settings: LMStudioSettings, path: str, payload: dict):
+        self.last_payload = dict(payload)
+        return await super().post_json(settings, path, payload)
 
 
 class ToolCallLMClient(FakeLMClient):
@@ -469,6 +485,55 @@ def test_auth_enforced_for_api(tmp_path: Path) -> None:
         "qwen/qwen3-vl-8b",
         "qwen/qwen3.5-35b-a3b",
     }
+
+
+def test_default_temperature_from_yaml_is_applied_when_request_omits_temperature(tmp_path: Path) -> None:
+    cfg = tmp_path / "router_config.yaml"
+    _write_config(cfg, default_temperature=0.35)
+    lm = CapturePayloadLMClient()
+    app = create_app(config_path=cfg, lm_client=lm)
+    client = TestClient(app)
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Beschreibe das Bild"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                ],
+            }
+        ],
+        "max_tokens": 100,
+    }
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 200
+    assert lm.last_payload is not None
+    assert lm.last_payload.get("temperature") == 0.35
+
+
+def test_request_temperature_overrides_yaml_default_temperature(tmp_path: Path) -> None:
+    cfg = tmp_path / "router_config.yaml"
+    _write_config(cfg, default_temperature=0.35)
+    lm = CapturePayloadLMClient()
+    app = create_app(config_path=cfg, lm_client=lm)
+    client = TestClient(app)
+    payload = {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Beschreibe das Bild"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                ],
+            }
+        ],
+        "temperature": 0.9,
+        "max_tokens": 100,
+    }
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 200
+    assert lm.last_payload is not None
+    assert lm.last_payload.get("temperature") == 0.9
 
 
 def test_non_coding_request_does_not_fallback_to_large_when_small_fails(cfg_file: Path) -> None:

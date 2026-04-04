@@ -185,6 +185,7 @@ class RoutingSettings(BaseModel):
     judge_timeout_seconds: float = 15.0
     fallback_enabled: bool = True
     hybrid_client_model_override: bool = True
+    default_temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
     heuristics: HeuristicSettings = Field(default_factory=HeuristicSettings)
 
 
@@ -331,6 +332,7 @@ def _default_config() -> dict[str, Any]:
             "judge_timeout_seconds": 15,
             "fallback_enabled": True,
             "hybrid_client_model_override": True,
+            "default_temperature": None,
             "heuristics": {
                 "large_prompt_token_threshold": 2200,
                 "large_max_tokens_threshold": 1800,
@@ -1219,6 +1221,20 @@ class RouterService:
         return normalized
 
     @staticmethod
+    def _apply_default_request_temperature(
+        cfg: RouterConfig,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if "temperature" in payload:
+            return payload
+        default_temperature = cfg.routing.default_temperature
+        if default_temperature is None:
+            return payload
+        normalized = dict(payload)
+        normalized["temperature"] = default_temperature
+        return normalized
+
+    @staticmethod
     def _normalize_thinking_param(
         settings: LMStudioSettings,
         path: str,
@@ -1226,6 +1242,34 @@ class RouterService:
         thinking_enabled: bool,
     ) -> dict[str, Any]:
         normalized = dict(payload)
+
+        def _set_lmstudio_thinking_flags(value: bool) -> None:
+            chat_kwargs = normalized.get("chat_template_kwargs")
+            if not isinstance(chat_kwargs, dict):
+                chat_kwargs = {}
+            else:
+                chat_kwargs = dict(chat_kwargs)
+            chat_kwargs["enable_thinking"] = value
+            normalized["chat_template_kwargs"] = chat_kwargs
+
+            extra_body = normalized.get("extra_body")
+            if not isinstance(extra_body, dict):
+                extra_body = {}
+            else:
+                extra_body = dict(extra_body)
+            extra_body["thinking"] = value
+            normalized["extra_body"] = extra_body
+
+            options = normalized.get("options")
+            if not isinstance(options, dict):
+                options = {}
+            else:
+                options = dict(options)
+            options["thinking"] = value
+            normalized["options"] = options
+
+            normalized["thinking"] = value
+
         if path != "/v1/chat/completions":
             if not thinking_enabled:
                 normalized.pop("reasoning", None)
@@ -1234,7 +1278,10 @@ class RouterService:
 
         if not thinking_enabled:
             normalized.pop("reasoning", None)
-            normalized.pop("thinking", None)
+            if settings.provider == "lm_studio":
+                _set_lmstudio_thinking_flags(False)
+            else:
+                normalized.pop("thinking", None)
             return normalized
 
         if settings.provider == "openai":
@@ -1245,6 +1292,8 @@ class RouterService:
                     reasoning["effort"] = "medium"
             else:
                 normalized["reasoning"] = {"effort": "medium"}
+        elif settings.provider == "lm_studio":
+            _set_lmstudio_thinking_flags(True)
         return normalized
 
     @staticmethod
@@ -1679,19 +1728,20 @@ class RouterService:
             payload_raw = dict(base_payload)
             payload_raw["model"] = cfg.models[alias].model_id
             payload_after_commit = self._normalize_commit_message_payload(path, payload_raw, decision)
+            payload_after_temperature = self._apply_default_request_temperature(cfg, payload_after_commit)
             thinking_enabled = (
                 decision.thinking_requested
                 and not decision.needs_tooluse
                 and cfg.models[alias].supports_thinking
             )
             payload_after_thinking = self._normalize_thinking_param(
-                settings, path, payload_after_commit, thinking_enabled
+                settings, path, payload_after_temperature, thinking_enabled
             )
             payload = payload_after_thinking
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
             if _thinking_debug_enabled():
                 logger.info(
-                    "thinking_debug_upstream_json path=%s alias=%s provider=%s decision_thinking=%s applied_thinking=%s raw=%s after_commit=%s after_thinking=%s final=%s",
+                    "thinking_debug_upstream_json path=%s alias=%s provider=%s decision_thinking=%s applied_thinking=%s raw=%s after_commit=%s after_temperature=%s after_thinking=%s final=%s",
                     path,
                     alias,
                     settings.provider,
@@ -1699,6 +1749,7 @@ class RouterService:
                     int(thinking_enabled),
                     _thinking_payload_probe(payload_raw),
                     _thinking_payload_probe(payload_after_commit),
+                    _thinking_payload_probe(payload_after_temperature),
                     _thinking_payload_probe(payload_after_thinking),
                     _thinking_payload_probe(payload),
                 )
@@ -1751,19 +1802,20 @@ class RouterService:
             payload_raw = dict(base_payload)
             payload_raw["model"] = cfg.models[alias].model_id
             payload_after_commit = self._normalize_commit_message_payload(path, payload_raw, decision)
+            payload_after_temperature = self._apply_default_request_temperature(cfg, payload_after_commit)
             thinking_enabled = (
                 decision.thinking_requested
                 and not decision.needs_tooluse
                 and cfg.models[alias].supports_thinking
             )
             payload_after_thinking = self._normalize_thinking_param(
-                settings, path, payload_after_commit, thinking_enabled
+                settings, path, payload_after_temperature, thinking_enabled
             )
             payload = payload_after_thinking
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
             if _thinking_debug_enabled():
                 logger.info(
-                    "thinking_debug_upstream_stream path=%s alias=%s provider=%s decision_thinking=%s applied_thinking=%s raw=%s after_commit=%s after_thinking=%s final=%s",
+                    "thinking_debug_upstream_stream path=%s alias=%s provider=%s decision_thinking=%s applied_thinking=%s raw=%s after_commit=%s after_temperature=%s after_thinking=%s final=%s",
                     path,
                     alias,
                     settings.provider,
@@ -1771,6 +1823,7 @@ class RouterService:
                     int(thinking_enabled),
                     _thinking_payload_probe(payload_raw),
                     _thinking_payload_probe(payload_after_commit),
+                    _thinking_payload_probe(payload_after_temperature),
                     _thinking_payload_probe(payload_after_thinking),
                     _thinking_payload_probe(payload),
                 )
@@ -1854,19 +1907,20 @@ class RouterService:
             payload_raw = dict(base_payload)
             payload_raw["model"] = cfg.models[alias].model_id
             payload_after_commit = self._normalize_commit_message_payload(path, payload_raw, decision)
+            payload_after_temperature = self._apply_default_request_temperature(cfg, payload_after_commit)
             thinking_enabled = (
                 decision.thinking_requested
                 and not decision.needs_tooluse
                 and cfg.models[alias].supports_thinking
             )
             payload_after_thinking = self._normalize_thinking_param(
-                settings, path, payload_after_commit, thinking_enabled
+                settings, path, payload_after_temperature, thinking_enabled
             )
             payload = payload_after_thinking
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
             if _thinking_debug_enabled():
                 logger.info(
-                    "thinking_debug_upstream_anthropic_stream path=%s alias=%s provider=%s decision_thinking=%s applied_thinking=%s raw=%s after_commit=%s after_thinking=%s final=%s",
+                    "thinking_debug_upstream_anthropic_stream path=%s alias=%s provider=%s decision_thinking=%s applied_thinking=%s raw=%s after_commit=%s after_temperature=%s after_thinking=%s final=%s",
                     path,
                     alias,
                     settings.provider,
@@ -1874,6 +1928,7 @@ class RouterService:
                     int(thinking_enabled),
                     _thinking_payload_probe(payload_raw),
                     _thinking_payload_probe(payload_after_commit),
+                    _thinking_payload_probe(payload_after_temperature),
                     _thinking_payload_probe(payload_after_thinking),
                     _thinking_payload_probe(payload),
                 )

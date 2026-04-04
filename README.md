@@ -123,6 +123,7 @@ Important knobs:
 
 - `server.host`
 - `server.port` (default `12345`)
+- `routing.default_temperature` to apply a default request temperature when clients do not send one
 - `routing.heuristics.*` for judge tuning
 - `router_identity.exposed_model_name` (default `borg-cpu`)
 - `models.<alias>.upstream_ref` for per-model upstream mapping

@@ -157,6 +157,7 @@ class RoutingSettings(BaseModel):
     judge_timeout_seconds: float = 15.0
     fallback_enabled: bool = True
     hybrid_client_model_override: bool = True
+    default_temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
     heuristics: HeuristicSettings = Field(default_factory=HeuristicSettings)
 
 
@@ -302,6 +303,7 @@ def _default_config() -> dict[str, Any]:
             "judge_timeout_seconds": 15,
             "fallback_enabled": True,
             "hybrid_client_model_override": True,
+            "default_temperature": None,
             "heuristics": {
                 "large_prompt_token_threshold": 2200,
                 "large_max_tokens_threshold": 1800,
@@ -1057,6 +1059,20 @@ class RouterService:
         normalized.pop("max_tokens", None)
         return normalized
 
+    @staticmethod
+    def _apply_default_request_temperature(
+        cfg: RouterConfig,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        if "temperature" in payload:
+            return payload
+        default_temperature = cfg.routing.default_temperature
+        if default_temperature is None:
+            return payload
+        normalized = dict(payload)
+        normalized["temperature"] = default_temperature
+        return normalized
+
     def _eligible_aliases(self, cfg: RouterConfig, req: UnifiedRequest) -> list[str]:
         required = req.required_capabilities
         total_tokens = req.estimated_total_tokens
@@ -1340,6 +1356,7 @@ class RouterService:
             settings = self._upstream_for_alias(cfg, alias)
             payload = dict(base_payload)
             payload["model"] = cfg.models[alias].model_id
+            payload = self._apply_default_request_temperature(cfg, payload)
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
             logger.info(
                 "upstream_json_attempt path=%s alias=%s model=%s attempt=%s/%s",
@@ -1388,6 +1405,7 @@ class RouterService:
             settings = self._upstream_for_alias(cfg, alias)
             payload = dict(base_payload)
             payload["model"] = cfg.models[alias].model_id
+            payload = self._apply_default_request_temperature(cfg, payload)
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
             logger.info(
                 "upstream_stream_attempt path=%s alias=%s model=%s attempt=%s/%s",
@@ -1459,6 +1477,7 @@ class RouterService:
             settings = self._upstream_for_alias(cfg, alias)
             payload = dict(base_payload)
             payload["model"] = cfg.models[alias].model_id
+            payload = self._apply_default_request_temperature(cfg, payload)
             payload = self._normalize_openai_chat_token_param(settings, path, payload)
             logger.info(
                 "anthropic_stream_semantic_attempt path=%s alias=%s model=%s attempt=%s/%s",

@@ -24,6 +24,7 @@ routing:
   judge_timeout_seconds: 15.0
   fallback_enabled: true
   hybrid_client_model_override: true
+  default_temperature: null
   heuristics:
     large_prompt_token_threshold: 2200
     large_max_tokens_threshold: 1800
