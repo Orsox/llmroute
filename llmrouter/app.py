@@ -35,10 +35,7 @@ from pathlib import Path
 _request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 
 # Optionaler Import des Konfigurationsfensters
-try:
-    from llmrouter.config_gui import ConfigGuiWindow
-except (ImportError, ModuleNotFoundError):
-    ConfigGuiWindow = None  # type: ignore
+# config_gui.py removed - HTML is now default UI
 
 
 class _RequestIdFilter(logging.Filter):
@@ -1374,9 +1371,11 @@ class RouterService:
 
         if not thinking_enabled:
             normalized.pop("reasoning", None)
-            normalized.pop("thinking", None)
             if settings.provider == "lm_studio":
-                _clear_lmstudio_thinking_flags()
+                # LM Studio / some qwen templates may default to thinking unless explicitly disabled.
+                _set_lmstudio_thinking_flags(False)
+            else:
+                normalized.pop("thinking", None)
             return normalized
 
         if settings.provider == "openai":
@@ -2481,6 +2480,26 @@ def _apply_public_model_name_to_openai_response(
 ) -> dict[str, Any]:
     patched = dict(openai_response)
     patched["model"] = public_model_name
+    choices = patched.get("choices")
+    if isinstance(choices, list):
+        sanitized_choices: list[Any] = []
+        for choice in choices:
+            if not isinstance(choice, dict):
+                sanitized_choices.append(choice)
+                continue
+            c = dict(choice)
+            message = c.get("message")
+            if isinstance(message, dict):
+                m = dict(message)
+                m.pop("reasoning_content", None)
+                c["message"] = m
+            delta = c.get("delta")
+            if isinstance(delta, dict):
+                d = dict(delta)
+                d.pop("reasoning_content", None)
+                c["delta"] = d
+            sanitized_choices.append(c)
+        patched["choices"] = sanitized_choices
     return patched
 
 
@@ -2514,6 +2533,26 @@ async def rewrite_openai_stream_model_name(
                             parsed = json.loads(data_line)
                             if isinstance(parsed, dict):
                                 parsed["model"] = public_model_name
+                                choices = parsed.get("choices")
+                                if isinstance(choices, list):
+                                    sanitized_choices: list[Any] = []
+                                    for choice in choices:
+                                        if not isinstance(choice, dict):
+                                            sanitized_choices.append(choice)
+                                            continue
+                                        c = dict(choice)
+                                        delta = c.get("delta")
+                                        if isinstance(delta, dict):
+                                            d = dict(delta)
+                                            d.pop("reasoning_content", None)
+                                            c["delta"] = d
+                                        message = c.get("message")
+                                        if isinstance(message, dict):
+                                            m = dict(message)
+                                            m.pop("reasoning_content", None)
+                                            c["message"] = m
+                                        sanitized_choices.append(c)
+                                    parsed["choices"] = sanitized_choices
                                 choices = parsed.get("choices") or []
                                 if choices:
                                     choice0 = choices[0]
@@ -3672,14 +3711,12 @@ def create_app(
         status = _set_windows_startup_enabled(payload.enabled)
         return JSONResponse(status)
 
-    @app.get("/settings")
-    async def settings_page(request: Request):
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_page(request: Request) -> str:
         await require_auth(request)
-        html_path = _project_root() / "html" / "settings.html"
-        if html_path.exists():
-            return FileResponse(html_path)
+        # Settings HTML direkt embedded - HTML is now default UI
         cfg = store.get_config()
-        return HTMLResponse(_settings_html(cfg))
+        return _admin_settings_html(cfg)
 
     return app
 
@@ -3867,23 +3904,9 @@ def run_with_tray(app_instance: FastAPI) -> None:
     admin_url, _admin_url, status_url = current_urls()
 
     def on_open_admin(_icon, _item) -> None:
-        """Öffne das Config GUI Fenster (PyQt6 oder Browser)."""
-        logger.debug("Opening config GUI from tray")
-        if QT_AVAILABLE and ConfigGuiWindow is not None:
-            try:
-                import sys
-                from PyQt6.QtWidgets import QApplication
-                # QApplication muss nur einmal initialisiert werden
-                if QApplication.instance() is None:
-                    QApplication(sys.argv)
-                window = ConfigGuiWindow(app_instance)
-                window.show()
-            except Exception as exc:
-                logger.exception("tray_open_config_gui_failed error=%s", exc)
-                webbrowser.open(admin_url, new=2)  # Fallback zu Browser
-        else:
-            logger.warning("PyQt6 not available, opening admin URL in browser")
-            webbrowser.open(admin_url, new=2)  # PyQt6 nicht verfügbar
+        """Öffne Admin Settings Seite im Browser."""
+        logger.debug("Opening admin settings page in browser")
+        webbrowser.open(admin_url + "/settings", new=2)
 
     def on_open_settings(_icon, _item) -> None:
         """Öffne Settings Seite."""
@@ -3948,10 +3971,10 @@ def run_with_tray(app_instance: FastAPI) -> None:
     icon.run()
 
 
-def _settings_html(cfg: "RouterConfig") -> str:
+def _admin_settings_html(cfg: RouterConfig) -> str:
     """
     Moderne Web-Oberfläche für alle YAML-Einstellungen.
-    Mit Dropdowns, Toggles und benutzerfreundlichen Feldern.
+    HTML is now default UI - keine Qt GUI mehr.
     """
     # Config in Python-Objekt konvertieren
     server = cfg.server
@@ -4568,7 +4591,6 @@ def _settings_html(cfg: "RouterConfig") -> str:
 </html>"""
 
     return html
-
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="LM Router")

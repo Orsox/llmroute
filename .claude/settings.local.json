@@ -7,7 +7,9 @@
       "Bash(mv:*)",
       "Bash(sed:*)",
       "Bash(python -c \"from llmrouter.config_gui import ConfigGuiWindow; print\\('Import erfolgreich'\\)\")",
-      "Bash(python -c \"import PyQt6; print\\('PyQt6 verfügbar'\\)\")"
+      "Bash(python -c \"import PyQt6; print\\('PyQt6 verfügbar'\\)\")",
+      "Bash(Get-ChildItem -Recurse -Filter app.py)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }
