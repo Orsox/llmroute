@@ -275,7 +275,7 @@ class ConfigStore:
 
     @staticmethod
     def _validate_required_model_aliases(cfg: RouterConfig) -> None:
-        required = {"small", "large", "deep"}
+        required = {"small", "large", "deep", "backup"}
         missing = required.difference(cfg.models.keys())
         if missing:
             missing_s = ", ".join(sorted(missing))
@@ -384,6 +384,15 @@ def _default_config() -> dict[str, Any]:
                 "supports_thinking": True,
                 "relative_speed": 0.5,
                 "suitable_for": "High-stakes reasoning and strict rule/compliance tasks.",
+            },
+            "backup": {
+                "model_id": "gpt-4o-mini",
+                "context_window": 128000,
+                "capabilities": ["chat", "completions", "tooluse"],
+                "upstream_ref": "deep",
+                "supports_thinking": False,
+                "relative_speed": 2.0,
+                "suitable_for": "Ultimate fallback when no other model fits constraints.",
             },
         },
     }
@@ -1675,17 +1684,22 @@ class RouterService:
             )
         if not candidates:
             logger.warning(
-                "route_eval_no_candidates required_caps=%s est_total_tokens=%s",
+                "route_eval_no_candidates_using_backup required_caps=%s est_total_tokens=%s",
                 sorted(req.required_capabilities),
                 req.estimated_total_tokens,
             )
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "No configured model satisfies required capabilities/context. "
-                    f"required={sorted(req.required_capabilities)} total_tokens={req.estimated_total_tokens}"
-                ),
+            selected = "backup"
+            decision = self._make_route_decision(
+                req=req,
+                selected_alias=selected,
+                reason="no_candidates_fallback_to_backup",
+                candidates=[selected],
+                thinking_requested=self._heuristic_thinking_requested(cfg, req, selected),
+                judge_model_id=cfg.models["small"].model_id,
+                is_coding=is_coding,
             )
+            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
+            return decision
 
         preferred_alias = None
         if not self._is_router_public_model_name(cfg, req.requested_model):

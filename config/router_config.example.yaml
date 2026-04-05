@@ -69,3 +69,14 @@ models:
     supports_thinking: true
     relative_speed: 0.8
     suitable_for: High-stakes reasoning and strict rule/compliance tasks.
+  backup:
+    model_id: gpt-4o-mini
+    context_window: 128000
+    capabilities:
+    - chat
+    - completions
+    - tooluse
+    upstream_ref: deep
+    supports_thinking: false
+    relative_speed: 2.0
+    suitable_for: Ultimate fallback when no other model fits constraints.
