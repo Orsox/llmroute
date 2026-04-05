@@ -11,21 +11,34 @@ import threading
 import time
 import uuid
 import webbrowser
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
 from typing import Any, AsyncIterator, Dict, Iterable, Literal, Optional
 
 import httpx
 import yaml
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field, model_validator
+
+try:
+    from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QLineEdit, QComboBox
+    QT_AVAILABLE = True
+except ImportError:
+    QT_AVAILABLE = False
+
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 
 _request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
+
+# Optionaler Import des Konfigurationsfensters
+try:
+    from llmrouter.config_gui import ConfigGuiWindow
+except (ImportError, ModuleNotFoundError):
+    ConfigGuiWindow = None  # type: ignore
 
 
 class _RequestIdFilter(logging.Filter):
@@ -39,8 +52,10 @@ def _configure_logging() -> logging.Logger:
     if app_logger.handlers:
         return app_logger
 
-    level_name = os.getenv("ROUTER_LOG_LEVEL", "INFO").upper()
+    level_name = os.getenv("ROUTER_LOG_LEVEL", "DEBUG").upper()
     level = getattr(logging, level_name, logging.INFO)
+    app_logger.setLevel(level)
+    app_logger.debug("Logger initialized with level=%s from env ROUTER_LOG_LEVEL", level_name)
     log_file_path = Path(os.getenv("ROUTER_LOG_FILE", "logs/router.log"))
     max_bytes = int(os.getenv("ROUTER_LOG_MAX_BYTES", str(5 * 1024 * 1024)))
     backup_count = int(os.getenv("ROUTER_LOG_BACKUP_COUNT", "3"))
@@ -378,6 +393,11 @@ def _default_config() -> dict[str, Any]:
 
 
 def _payload_summary(payload: dict[str, Any]) -> str:
+    def _safe_get(container: Any, key: str) -> Any:
+        if isinstance(container, dict):
+            return container.get(key)
+        return None
+
     model = payload.get("model")
     stream = bool(payload.get("stream"))
     max_tokens = payload.get("max_tokens", payload.get("max_completion_tokens"))
@@ -385,9 +405,19 @@ def _payload_summary(payload: dict[str, Any]) -> str:
     msg_count = len(messages) if isinstance(messages, list) else 0
     has_tools = bool(payload.get("tools"))
     has_prompt = "prompt" in payload
-    has_thinking = "thinking" in payload
-    has_reasoning = "reasoning" in payload
+    chat_kwargs = payload.get("chat_template_kwargs")
+    extra_body = payload.get("extra_body")
+    options = payload.get("options")
+    has_thinking = any(
+        [
+            payload.get("thinking") is True,
+            _safe_get(chat_kwargs, "enable_thinking") is True,
+            _safe_get(extra_body, "thinking") is True,
+            _safe_get(options, "thinking") is True,
+        ]
+    )
     reasoning = payload.get("reasoning")
+    has_reasoning = isinstance(reasoning, dict) and bool(reasoning)
     reasoning_effort = reasoning.get("effort") if isinstance(reasoning, dict) else None
     return (
         f"model={model!r} stream={stream} max_tokens={max_tokens} "
@@ -482,6 +512,15 @@ def _estimate_tokens_from_text(text: str) -> int:
     return max(1, math.ceil(len(text) / 4))
 
 
+def _log_text_max_chars() -> int:
+    return max(200, int(os.getenv("ROUTER_LOG_TEXT_MAX_CHARS", "4000")))
+
+
+def _clip_for_log(text: str, max_chars: Optional[int] = None) -> str:
+    limit = _log_text_max_chars() if max_chars is None else max(50, max_chars)
+    return (text or "")[:limit]
+
+
 def _extract_assistant_text(openai_response: dict[str, Any]) -> str:
     choices = openai_response.get("choices") or []
     if not choices:
@@ -493,6 +532,17 @@ def _extract_assistant_text(openai_response: dict[str, Any]) -> str:
         return text
     completion_text = choices[0].get("text")
     return completion_text or ""
+
+
+def _extract_openai_tool_call_count(openai_response: dict[str, Any]) -> int:
+    choices = openai_response.get("choices") or []
+    if not choices:
+        return 0
+    message = choices[0].get("message", {})
+    tool_calls = message.get("tool_calls") or []
+    if isinstance(tool_calls, list):
+        return len(tool_calls)
+    return 0
 
 
 class UnifiedRequest(BaseModel):
@@ -645,6 +695,9 @@ class RouteDecision:
     complexity: str = "low"
     context_signature: str = "none"
     repetition_key: str = "none"
+    prompt_text: str = ""
+    user_prompt_text: str = ""
+    latest_user_prompt_text: str = ""
 
     def __post_init__(self) -> None:
         if self.required_capabilities is None:
@@ -1166,6 +1219,14 @@ class RouterService:
         material = f"{req.source_api}|{req.required_base_capability}|{normalized}"
         return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
 
+    @staticmethod
+    def _small_coding_context_limit_tokens() -> int:
+        return max(2048, int(os.getenv("ROUTER_SMALL_CODING_MAX_TOTAL_TOKENS", "32000")))
+
+    @staticmethod
+    def _small_coding_task_limit_tokens() -> int:
+        return max(1024, int(os.getenv("ROUTER_SMALL_CODING_TASK_MAX_TOTAL_TOKENS", "8000")))
+
     def _make_route_decision(
         self,
         req: UnifiedRequest,
@@ -1176,6 +1237,7 @@ class RouterService:
         judge_model_id: Optional[str],
         is_coding: bool,
     ) -> RouteDecision:
+        prompt_log_max_chars = max(200, int(os.getenv("ROUTER_PROMPT_LOG_MAX_CHARS", "4000")))
         return RouteDecision(
             selected_alias=selected_alias,
             reason=reason,
@@ -1196,6 +1258,9 @@ class RouterService:
             complexity=self._complexity_bucket(req, is_coding),
             context_signature=self._context_signature(req, is_coding),
             repetition_key=self._repetition_key(req),
+            prompt_text=(req.prompt_text or "")[:prompt_log_max_chars],
+            user_prompt_text=(req.user_prompt_text or "")[:prompt_log_max_chars],
+            latest_user_prompt_text=(req.latest_user_prompt_text or "")[:prompt_log_max_chars],
         )
 
     @staticmethod
@@ -1243,6 +1308,35 @@ class RouterService:
     ) -> dict[str, Any]:
         normalized = dict(payload)
 
+        def _clear_lmstudio_thinking_flags() -> None:
+            chat_kwargs = normalized.get("chat_template_kwargs")
+            if isinstance(chat_kwargs, dict):
+                chat_kwargs = dict(chat_kwargs)
+                chat_kwargs.pop("enable_thinking", None)
+                if chat_kwargs:
+                    normalized["chat_template_kwargs"] = chat_kwargs
+                else:
+                    normalized.pop("chat_template_kwargs", None)
+
+            extra_body = normalized.get("extra_body")
+            if isinstance(extra_body, dict):
+                extra_body = dict(extra_body)
+                extra_body.pop("thinking", None)
+                extra_body.pop("reasoning", None)
+                if extra_body:
+                    normalized["extra_body"] = extra_body
+                else:
+                    normalized.pop("extra_body", None)
+
+            options = normalized.get("options")
+            if isinstance(options, dict):
+                options = dict(options)
+                options.pop("thinking", None)
+                if options:
+                    normalized["options"] = options
+                else:
+                    normalized.pop("options", None)
+
         def _set_lmstudio_thinking_flags(value: bool) -> None:
             chat_kwargs = normalized.get("chat_template_kwargs")
             if not isinstance(chat_kwargs, dict):
@@ -1274,14 +1368,15 @@ class RouterService:
             if not thinking_enabled:
                 normalized.pop("reasoning", None)
                 normalized.pop("thinking", None)
+                if settings.provider == "lm_studio":
+                    _clear_lmstudio_thinking_flags()
             return normalized
 
         if not thinking_enabled:
             normalized.pop("reasoning", None)
+            normalized.pop("thinking", None)
             if settings.provider == "lm_studio":
-                _set_lmstudio_thinking_flags(False)
-            else:
-                normalized.pop("thinking", None)
+                _clear_lmstudio_thinking_flags()
             return normalized
 
         if settings.provider == "openai":
@@ -1551,6 +1646,15 @@ class RouterService:
         is_commit_task = self._is_commit_message_task(req)
         is_no_thinking_task = self._is_no_thinking_task(req)
         is_file_search = self._is_file_search_request(req)
+        small_coding_context_limit = self._small_coding_context_limit_tokens()
+        small_coding_task_limit = self._small_coding_task_limit_tokens()
+        if is_coding and "small" in candidates and req.estimated_total_tokens > small_coding_context_limit:
+            candidates = [alias for alias in candidates if alias != "small"]
+            logger.info(
+                "route_eval_filter_small_coding_context est_total_tokens=%s limit=%s",
+                req.estimated_total_tokens,
+                small_coding_context_limit,
+            )
         logger.info(
             "route_eval_start source=%s requested_model=%r stream=%s required_caps=%s candidates=%s est_total_tokens=%s is_coding=%s",
             req.source_api,
@@ -1591,9 +1695,17 @@ class RouterService:
         small_policy_reason: Optional[str] = None
         if is_commit_task and "small" in candidates:
             small_policy_reason = "policy_commit_message_small"
-        elif req.needs_tooluse and "small" in candidates:
+        elif (
+            req.needs_tooluse
+            and "small" in candidates
+            and (not is_coding or req.estimated_total_tokens <= small_coding_task_limit)
+        ):
             small_policy_reason = "policy_tooluse_small"
-        elif is_file_search and "small" in candidates:
+        elif (
+            is_file_search
+            and "small" in candidates
+            and (not is_coding or req.estimated_total_tokens <= small_coding_task_limit)
+        ):
             small_policy_reason = "policy_file_search_small"
 
         if small_policy_reason:
@@ -1946,6 +2058,11 @@ class RouterService:
             translated = translate_openai_stream_to_anthropic(
                 upstream_stream,
                 cfg.router_identity.exposed_model_name,
+                source_api=decision.source_api,
+                decision=decision,
+                final_alias=alias,
+                final_model_id=cfg.models[alias].model_id,
+                used_fallback=idx > 0,
             )
 
             buffered: list[bytes] = []
@@ -2016,6 +2133,11 @@ class RouterService:
             public_stream = rewrite_openai_stream_model_name(
                 stream_gen,
                 cfg.router_identity.exposed_model_name,
+                source_api=req.source_api,
+                decision=decision,
+                final_alias=alias,
+                final_model_id=cfg.models[alias].model_id,
+                used_fallback=used_fallback,
             )
             return decision, alias, used_fallback, public_stream
         alias, body, used_fallback = await self._attempt_json_with_fallback(
@@ -2024,6 +2146,20 @@ class RouterService:
         public_body = _apply_public_model_name_to_openai_response(
             body,
             cfg.router_identity.exposed_model_name,
+        )
+        usage = public_body.get("usage") or {}
+        _log_output_analytics(
+            source_api=req.source_api,
+            decision=decision,
+            final_alias=alias,
+            final_model_id=cfg.models[alias].model_id,
+            used_fallback=used_fallback,
+            stream=False,
+            output_text=_extract_assistant_text(public_body),
+            stop_reason=((public_body.get("choices") or [{}])[0].get("finish_reason")),
+            output_tokens=usage.get("completion_tokens"),
+            input_tokens=usage.get("prompt_tokens"),
+            tool_calls=_extract_openai_tool_call_count(public_body),
         )
         return decision, alias, used_fallback, public_body
 
@@ -2038,6 +2174,11 @@ class RouterService:
             public_stream = rewrite_openai_stream_model_name(
                 stream_gen,
                 cfg.router_identity.exposed_model_name,
+                source_api=req.source_api,
+                decision=decision,
+                final_alias=alias,
+                final_model_id=cfg.models[alias].model_id,
+                used_fallback=used_fallback,
             )
             return decision, alias, used_fallback, public_stream
         alias, body, used_fallback = await self._attempt_json_with_fallback(
@@ -2046,6 +2187,20 @@ class RouterService:
         public_body = _apply_public_model_name_to_openai_response(
             body,
             cfg.router_identity.exposed_model_name,
+        )
+        usage = public_body.get("usage") or {}
+        _log_output_analytics(
+            source_api=req.source_api,
+            decision=decision,
+            final_alias=alias,
+            final_model_id=cfg.models[alias].model_id,
+            used_fallback=used_fallback,
+            stream=False,
+            output_text=_extract_assistant_text(public_body),
+            stop_reason=((public_body.get("choices") or [{}])[0].get("finish_reason")),
+            output_tokens=usage.get("completion_tokens"),
+            input_tokens=usage.get("prompt_tokens"),
+            tool_calls=_extract_openai_tool_call_count(public_body),
         )
         return decision, alias, used_fallback, public_body
 
@@ -2071,6 +2226,32 @@ class RouterService:
         anthropic_response = openai_to_anthropic_response(
             response_json,
             cfg.router_identity.exposed_model_name,
+        )
+        usage = anthropic_response.get("usage") or {}
+        text_blocks = anthropic_response.get("content") or []
+        text_parts: list[str] = []
+        tool_calls = 0
+        if isinstance(text_blocks, list):
+            for block in text_blocks:
+                if not isinstance(block, dict):
+                    continue
+                block_type = str(block.get("type") or "")
+                if block_type == "text":
+                    text_parts.append(str(block.get("text") or ""))
+                elif block_type == "tool_use":
+                    tool_calls += 1
+        _log_output_analytics(
+            source_api=req.source_api,
+            decision=decision,
+            final_alias=alias,
+            final_model_id=cfg.models[alias].model_id,
+            used_fallback=used_fallback,
+            stream=False,
+            output_text="".join(text_parts),
+            stop_reason=anthropic_response.get("stop_reason"),
+            output_tokens=usage.get("output_tokens"),
+            input_tokens=usage.get("input_tokens"),
+            tool_calls=tool_calls,
         )
         return decision, alias, used_fallback, False, anthropic_response
 
@@ -2304,9 +2485,21 @@ def _apply_public_model_name_to_openai_response(
 
 
 async def rewrite_openai_stream_model_name(
-    upstream_stream: AsyncIterator[bytes], public_model_name: str
+    upstream_stream: AsyncIterator[bytes],
+    public_model_name: str,
+    source_api: str = "openai_chat",
+    decision: Optional[RouteDecision] = None,
+    final_alias: str = "unknown",
+    final_model_id: str = "unknown",
+    used_fallback: bool = False,
 ) -> AsyncIterator[bytes]:
     buffer = ""
+    output_chunks: list[str] = []
+    output_text_chars = 0
+    stop_reason: Optional[str] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    tool_calls = 0
     async for chunk in upstream_stream:
         text = chunk.decode("utf-8", errors="replace")
         buffer += text
@@ -2321,6 +2514,32 @@ async def rewrite_openai_stream_model_name(
                             parsed = json.loads(data_line)
                             if isinstance(parsed, dict):
                                 parsed["model"] = public_model_name
+                                choices = parsed.get("choices") or []
+                                if choices:
+                                    choice0 = choices[0]
+                                    delta_text = _extract_delta_text(choice0 if isinstance(choice0, dict) else {})
+                                    if delta_text:
+                                        remaining = _log_text_max_chars() - output_text_chars
+                                        if remaining > 0:
+                                            clipped = delta_text[:remaining]
+                                            output_chunks.append(clipped)
+                                            output_text_chars += len(clipped)
+                                    if isinstance(choice0, dict):
+                                        finish_reason = choice0.get("finish_reason")
+                                        if finish_reason:
+                                            stop_reason = str(finish_reason)
+                                        delta = choice0.get("delta") or {}
+                                        raw_tool_calls = delta.get("tool_calls") or []
+                                        if isinstance(raw_tool_calls, list):
+                                            tool_calls += len(raw_tool_calls)
+                                usage = parsed.get("usage") or {}
+                                if isinstance(usage, dict):
+                                    in_tok = usage.get("prompt_tokens")
+                                    out_tok = usage.get("completion_tokens")
+                                    if isinstance(in_tok, int):
+                                        input_tokens = max(input_tokens or 0, in_tok)
+                                    if isinstance(out_tok, int):
+                                        output_tokens = max(output_tokens or 0, out_tok)
                                 line = f"data: {json.dumps(parsed, ensure_ascii=False)}"
                         except json.JSONDecodeError:
                             pass
@@ -2328,6 +2547,20 @@ async def rewrite_openai_stream_model_name(
             yield ("\n".join(out_lines) + "\n\n").encode("utf-8")
     if buffer:
         yield buffer.encode("utf-8")
+    if decision is not None:
+        _log_output_analytics(
+            source_api=source_api,
+            decision=decision,
+            final_alias=final_alias,
+            final_model_id=final_model_id,
+            used_fallback=used_fallback,
+            stream=True,
+            output_text="".join(output_chunks),
+            stop_reason=stop_reason,
+            output_tokens=output_tokens,
+            input_tokens=input_tokens,
+            tool_calls=tool_calls,
+        )
 
 
 def _sse_encode(event: str, payload: dict[str, Any]) -> bytes:
@@ -2391,7 +2624,13 @@ def _extract_delta_text(choice: dict[str, Any]) -> str:
 
 
 async def translate_openai_stream_to_anthropic(
-    upstream_stream: AsyncIterator[bytes], model_id: str
+    upstream_stream: AsyncIterator[bytes],
+    model_id: str,
+    source_api: str = "anthropic_messages",
+    decision: Optional[RouteDecision] = None,
+    final_alias: str = "unknown",
+    final_model_id: str = "unknown",
+    used_fallback: bool = False,
 ) -> AsyncIterator[bytes]:
     message_id = f"msg_{uuid.uuid4().hex[:24]}"
     usage_input = 0
@@ -2403,6 +2642,8 @@ async def translate_openai_stream_to_anthropic(
     text_delta_events = 0
     tool_blocks_emitted = 0
     tool_call_state: dict[int, dict[str, Any]] = {}
+    output_chunks: list[str] = []
+    output_text_chars = 0
 
     logger.info("anthropic_stream_translate_start model=%s", model_id)
 
@@ -2443,6 +2684,11 @@ async def translate_openai_stream_to_anthropic(
                 choice = choices[0]
                 delta_text = _extract_delta_text(choice)
                 if delta_text:
+                    remaining = _log_text_max_chars() - output_text_chars
+                    if remaining > 0:
+                        clipped = delta_text[:remaining]
+                        output_chunks.append(clipped)
+                        output_text_chars += len(clipped)
                     if not text_block_open:
                         text_block_open = True
                         text_block_index = next_block_index
@@ -2583,6 +2829,20 @@ async def translate_openai_stream_to_anthropic(
         usage_input,
         usage_output,
     )
+    if decision is not None:
+        _log_output_analytics(
+            source_api=source_api,
+            decision=decision,
+            final_alias=final_alias,
+            final_model_id=final_model_id,
+            used_fallback=used_fallback,
+            stream=True,
+            output_text="".join(output_chunks),
+            stop_reason=stop_reason,
+            output_tokens=usage_output,
+            input_tokens=usage_input,
+            tool_calls=tool_blocks_emitted,
+        )
 
 
 def _route_headers(cfg: RouterConfig, decision: RouteDecision, final_alias: str, used_fallback: bool) -> dict[str, str]:
@@ -2616,6 +2876,7 @@ def _log_route_analytics(
         "selected_alias": final_alias,
         "selected_model": selected_model_id,
         "reason": decision.reason,
+        "effective_reason": decision.reason if not used_fallback else f"fallback_from_{decision.reason}",
         "fallback_used": used_fallback,
         "stream": decision.stream,
         "candidate_aliases": decision.candidate_aliases,
@@ -2629,6 +2890,9 @@ def _log_route_analytics(
         "needs_tooluse": decision.needs_tooluse,
         "is_coding": decision.is_coding_request,
         "repetition_key": decision.repetition_key,
+        "prompt_text": decision.prompt_text,
+        "user_prompt_text": decision.user_prompt_text,
+        "latest_user_prompt_text": decision.latest_user_prompt_text,
         "thinking_requested": decision.thinking_requested,
         "thinking_applied": (
             decision.thinking_requested
@@ -2637,6 +2901,38 @@ def _log_route_analytics(
         ),
     }
     logger.info("route_analytics %s", json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
+
+
+def _log_output_analytics(
+    source_api: str,
+    decision: RouteDecision,
+    final_alias: str,
+    final_model_id: str,
+    used_fallback: bool,
+    stream: bool,
+    output_text: str,
+    stop_reason: Optional[str] = None,
+    output_tokens: Optional[int] = None,
+    input_tokens: Optional[int] = None,
+    tool_calls: Optional[int] = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "event": "output_analytics",
+        "v": 1,
+        "source": source_api,
+        "selected_alias": final_alias,
+        "selected_model": final_model_id,
+        "reason": decision.reason,
+        "fallback_used": used_fallback,
+        "stream": stream,
+        "stop_reason": stop_reason,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "tool_calls": tool_calls,
+        "output_text_chars": len(output_text or ""),
+        "output_text_excerpt": _clip_for_log(output_text),
+    }
+    logger.info("output_analytics %s", json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
 
 
 def _build_models_response(cfg: RouterConfig) -> dict[str, Any]:
@@ -3195,8 +3491,11 @@ def create_app(
     model_check_interval_seconds: float = 60.0,
 ) -> FastAPI:
     cfg_path = config_path or DEFAULT_CONFIG_PATH
+    logger.debug("Creating app with config path=%s", cfg_path)
     store = ConfigStore(cfg_path)
+    logger.debug("ConfigStore initialized")
     service = RouterService(store, lm_client=lm_client)
+    logger.debug("RouterService initialized with lm_client=%s", lm_client is not None)
     monitor = ModelAvailabilityMonitor(store, service.lm_client, check_interval_seconds=model_check_interval_seconds)
 
     @asynccontextmanager
@@ -3373,6 +3672,15 @@ def create_app(
         status = _set_windows_startup_enabled(payload.enabled)
         return JSONResponse(status)
 
+    @app.get("/settings")
+    async def settings_page(request: Request):
+        await require_auth(request)
+        html_path = _project_root() / "html" / "settings.html"
+        if html_path.exists():
+            return FileResponse(html_path)
+        cfg = store.get_config()
+        return HTMLResponse(_settings_html(cfg))
+
     return app
 
 
@@ -3394,21 +3702,28 @@ class RouterServerController:
         self.last_error: Optional[str] = None
 
     def start(self) -> bool:
+        logger.debug("ServerController.start() called, running=%s", self._thread is not None and self._thread.is_alive())
         with self._lock:
             if self._thread and self._thread.is_alive():
+                logger.debug("Server already running")
                 return True
             self.last_error = None
             self._start_event = threading.Event()
             self._thread = threading.Thread(target=self._serve, name="llm-router-server", daemon=True)
             self._thread.start()
+            logger.debug("Server thread started")
         self._start_event.wait(timeout=5.0)
-        return self.last_error is None
+        result = self.last_error is None
+        logger.debug("Server start completed, running=%s, error=%s", result, self.last_error if not result else None)
+        return result
 
     def _serve(self) -> None:
+        logger.debug("Server _serve() thread started")
         try:
             import uvicorn
 
             runtime_cfg = self._app.state.config_store.get_config()
+            logger.debug("Creating uvicorn server: host=%s port=%s", runtime_cfg.server.host, runtime_cfg.server.port)
             server_config = uvicorn.Config(
                 self._app,
                 host=runtime_cfg.server.host,
@@ -3422,10 +3737,11 @@ class RouterServerController:
                 self._server = server
             self._start_event.set()
             asyncio.set_event_loop(loop)
+            logger.debug("Starting uvicorn server")
             loop.run_until_complete(server.serve())
         except Exception as exc:  # noqa: BLE001
-            self.last_error = str(exc)
             logger.exception("tray_server_failed error=%s", exc)
+            self.last_error = str(exc)
             self._start_event.set()
         finally:
             with self._lock:
@@ -3470,36 +3786,54 @@ class RouterServerController:
 
 
 def _build_tray_icon(is_running: bool):
-    from PIL import Image, ImageDraw
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        logger.error("PIL not available in _build_tray_icon")
+        return None
 
     size = 64
     asset_path = _project_root() / "assets" / "llmrouter_route_icon.png"
     indicator = "#22c55e" if is_running else "#ef4444"
 
-    if asset_path.exists():
-        image = Image.open(asset_path).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
-    else:
-        image = Image.new("RGBA", (size, size), "#0b1220")
-        draw = ImageDraw.Draw(image)
-        draw.rounded_rectangle((2, 2, size - 3, size - 3), radius=14, fill="#0b1220", outline="#1f2937", width=2)
-        path_points = [(14, 46), (25, 34), (37, 34), (50, 18)]
-        draw.line(path_points, fill="#0ea5e9", width=10, joint="curve")
-        draw.line(path_points, fill="#38bdf8", width=6, joint="curve")
-        for px, py in [(14, 46), (37, 34), (50, 18)]:
-            draw.ellipse((px - 4, py - 4, px + 4, py + 4), fill="#f8fafc", outline="#0ea5e9", width=1)
+    try:
+        if asset_path.exists():
+            image = Image.open(asset_path).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+        else:
+            image = Image.new("RGBA", (size, size), "#0b1220")
+            draw = ImageDraw.Draw(image)
+            draw.rounded_rectangle((2, 2, size - 3, size - 3), radius=14, fill="#0b1220", outline="#1f2937", width=2)
+            path_points = [(14, 46), (25, 34), (37, 34), (50, 18)]
+            draw.line(path_points, fill="#0ea5e9", width=10, joint="curve")
+            draw.line(path_points, fill="#38bdf8", width=6, joint="curve")
+            for px, py in [(14, 46), (37, 34), (50, 18)]:
+                draw.ellipse((px - 4, py - 4, px + 4, py + 4), fill="#f8fafc", outline="#0ea5e9", width=1)
 
-    draw = ImageDraw.Draw(image)
-    draw.ellipse((45, 45, 61, 61), fill=indicator, outline="#ffffff", width=2)
-    return image
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((45, 45, 61, 61), fill=indicator, outline="#ffffff", width=2)
+        return image
+    except Exception as exc:
+        logger.exception("Failed to build tray icon: %s", exc)
+        # Fallback: einfaches farbiges Quadrat
+        return Image.new("RGBA", (size, size), indicator)
 
 
 def run_with_tray(app_instance: FastAPI) -> None:
+    logger.info("Starting LM Router in tray mode")
     try:
         import pystray
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError("Tray mode requires pystray and pillow. Install with: pip install -r requirements.txt") from exc
+        from PIL import Image  # noqa: F401 - verify pillow is available
+    except ImportError as exc:
+        logger.error("Tray mode unavailable: pystray/PIL not installed")
+        raise RuntimeError(
+            "Tray mode requires pystray and pillow. "
+            "Install with: pip install -r requirements.txt"
+        ) from exc
 
     config_store = app_instance.state.config_store
+    runtime_cfg = config_store.get_config()
+    logger.debug("Tray mode config loaded: host=%s port=%s",
+                 runtime_cfg.server.host, runtime_cfg.server.port)
 
     def current_urls() -> tuple[str, str, str]:
         runtime_cfg = config_store.get_config()
@@ -3507,12 +3841,16 @@ def run_with_tray(app_instance: FastAPI) -> None:
         return base_url, f"{base_url}/admin", f"{base_url}/admin/status"
 
     controller = RouterServerController(app_instance)
+    logger.debug("Starting router server controller")
     controller.start()
+    logger.debug("Router server controller started, running=%s", controller.is_running())
 
-    icon = pystray.Icon("llm-router", icon=_build_tray_icon(controller.is_running()), title="LM Router")
+    # Initiales Icon-Bild erstellen
+    initial_icon = _build_tray_icon(controller.is_running())
+    icon = pystray.Icon("llm-router", icon=initial_icon, title="LM Router")
     shutdown_event = threading.Event()
 
-    def status_text() -> str:
+    def status_text(item=None) -> str:
         base_url, _, _ = current_urls()
         if controller.is_running():
             return f"Status: Running ({base_url})"
@@ -3523,41 +3861,72 @@ def run_with_tray(app_instance: FastAPI) -> None:
         return "Status: Stopped"
 
     def refresh_visuals() -> None:
-        running = controller.is_running()
-        icon.icon = _build_tray_icon(running)
-        icon.title = "LM Router (Running)" if running else "LM Router (Stopped)"
-        icon.update_menu()
+        icon.title = "LM Router (Running)" if controller.is_running() else "LM Router (Stopped)"
+        _refresh_icon()
+
+    admin_url, _admin_url, status_url = current_urls()
 
     def on_open_admin(_icon, _item) -> None:
-        _, admin_url, _ = current_urls()
-        webbrowser.open(admin_url, new=2)
+        """Öffne das Config GUI Fenster (PyQt6 oder Browser)."""
+        logger.debug("Opening config GUI from tray")
+        if QT_AVAILABLE and ConfigGuiWindow is not None:
+            try:
+                import sys
+                from PyQt6.QtWidgets import QApplication
+                # QApplication muss nur einmal initialisiert werden
+                if QApplication.instance() is None:
+                    QApplication(sys.argv)
+                window = ConfigGuiWindow(app_instance)
+                window.show()
+            except Exception as exc:
+                logger.exception("tray_open_config_gui_failed error=%s", exc)
+                webbrowser.open(admin_url, new=2)  # Fallback zu Browser
+        else:
+            logger.warning("PyQt6 not available, opening admin URL in browser")
+            webbrowser.open(admin_url, new=2)  # PyQt6 nicht verfügbar
+
+    def on_open_settings(_icon, _item) -> None:
+        """Öffne Settings Seite."""
+        settings_url = f"{admin_url}/settings"
+        logger.debug("Opening settings page at %s", settings_url)
+        webbrowser.open(settings_url, new=2)
 
     def on_open_health(_icon, _item) -> None:
         _, _, status_url = current_urls()
+        logger.debug("Opening health status in browser")
         webbrowser.open(status_url, new=2)
 
     def on_restart(_icon, _item) -> None:
+        logger.debug("Reloading config and restarting server")
         old_cfg = config_store.get_config()
         controller.stop()
         try:
             config_store._config = config_store._load_from_disk()
             logger.info("tray_restart_config_reloaded")
         except Exception as exc:  # noqa: BLE001
+            logger.exception("tray_restart_config_reload_failed error=%s", exc)
             config_store._config = old_cfg
             controller.last_error = f"Config reload failed: {exc}"
-            logger.exception("tray_restart_config_reload_failed error=%s", exc)
         controller.start()
         refresh_visuals()
 
     def on_quit(_icon, _item) -> None:
+        logger.debug("Stopping tray icon and controller")
         shutdown_event.set()
         controller.stop()
         _icon.stop()
 
+    def _refresh_icon() -> None:
+        """Tray-Icon neu erstellen (benötigt wird, da pystray keine dynamischen Updates unterstützt)."""
+        is_running = controller.is_running()
+        new_icon = _build_tray_icon(is_running)
+        icon.icon = new_icon
+
     icon.menu = pystray.Menu(
-        pystray.MenuItem(lambda _item: status_text(), None, enabled=False),
-        pystray.MenuItem("Settings oeffnen", on_open_admin),
-        pystray.MenuItem("Status oeffnen", on_open_health),
+        pystray.MenuItem(status_text, lambda: None, enabled=False),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Settings", on_open_settings),  # Direkter Zugriff auf die Web-Oberfläche
+        pystray.MenuItem("Status", on_open_health),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Router neu starten", on_restart),
         pystray.MenuItem("Beenden", on_quit),
@@ -3573,14 +3942,638 @@ def run_with_tray(app_instance: FastAPI) -> None:
 
     monitor_thread = threading.Thread(target=monitor, name="llm-router-tray-monitor", daemon=True)
     monitor_thread.start()
+    logger.debug("Monitor thread started")
 
     refresh_visuals()
     icon.run()
 
 
+def _settings_html(cfg: "RouterConfig") -> str:
+    """
+    Moderne Web-Oberfläche für alle YAML-Einstellungen.
+    Mit Dropdowns, Toggles und benutzerfreundlichen Feldern.
+    """
+    # Config in Python-Objekt konvertieren
+    server = cfg.server
+    upstreams = cfg.upstreams
+    routing = cfg.routing
+    identity = cfg.router_identity
+    heuristics = routing.heuristics if hasattr(routing, "heuristics") else None
+
+    # Models für Router/Judge
+    model_ids = list(cfg.models.keys())
+
+    html = f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LM Router Settings</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-bootstrap-4@5/bootstrap-4.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    :root {{
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-hover: #334155;
+      --ink: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --line: #334155;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: var(--ink);
+      margin: 0;
+      padding: 24px;
+      min-height: 100vh;
+    }}
+    .container {{ max-width: 1200px; margin: 0 auto; }}
+    header {{
+      text-align: center;
+      margin-bottom: 32px;
+      padding: 24px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(99, 102, 241, 0.2);
+    }}
+    h1 {{ margin: 0; font-size: 28px; font-weight: 700; }}
+    p.subtitle {{ margin: 12px 0 0; color: rgba(255,255,255,0.9); font-size: 14px; }}
+
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }}
+    .card {{
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.2s ease;
+    }}
+    .card:hover {{ border-color: var(--accent); }}
+    .card h2 {{
+      margin: 0 0 20px;
+      font-size: 18px;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .card h2::before {{
+      content: "⚙️";
+    }}
+
+    .form-group {{ margin-bottom: 16px; }}
+    .form-group:last-child {{ margin-bottom: 0; }}
+    label {{
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }}
+    input[type="text"], input[type="number"], select {{
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg);
+      border: 2px solid var(--line);
+      border-radius: 10px;
+      color: var(--ink);
+      font-size: 14px;
+      transition: all 0.2s;
+    }}
+    input:focus, select:focus {{
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }}
+    select {{ cursor: pointer; }}
+
+    .toggle {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 2px solid var(--line);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }}
+    .toggle:hover {{ border-color: var(--accent); }}
+    .toggle input {{ margin: 0; cursor: pointer; }}
+    .toggle-label {{ font-size: 14px; color: var(--ink); }}
+
+    .status {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--card);
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }}
+    .status-dot {{
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 16px var(--success);
+    }}
+    .status-dot.error {{ background: var(--error); box-shadow: 0 0 16px var(--error); }}
+    .status-info {{ color: var(--muted); font-size: 13px; }}
+
+    .btn {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }}
+    .btn-primary {{
+      background: var(--accent);
+      color: white;
+    }}
+    .btn-primary:hover {{
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+    }}
+    .btn-secondary {{
+      background: var(--card);
+      border: 2px solid var(--line);
+      color: var(--ink);
+    }}
+    .btn-secondary:hover {{
+      border-color: var(--accent);
+      background: var(--card-hover);
+    }}
+
+    .config-actions {{
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }}
+    .section-title {{
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--muted);
+      margin: 24px 0 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }}
+
+    .upstream-item {{
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }}
+    .upstream-item:last-child {{ margin-bottom: 0; }}
+
+    @media (max-width: 768px) {{
+      .grid {{ grid-template-columns: 1fr; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>⚡ LLM Router Settings</h1>
+      <p class="subtitle">Kontrolliere alle Einstellungen mit einfachen Dropdowns und Toggles</p>
+    </header>
+
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <div class="status-info" id="statusInfo">Lade Konfiguration...</div>
+    </div>
+
+    <div class="config-actions">
+      <button class="btn btn-primary" onclick="loadConfig()">📥 Config laden</button>
+      <button class="btn btn-secondary" onclick="saveConfig()">💾 Speichern</button>
+      <a href="/admin/config" class="btn btn-secondary">📄 Raw YAML</a>
+    </div>
+
+    <div class="section-title">🌐 Server Einstellungen</div>
+    <div class="grid">
+      <div class="card">
+        <h2>Host & Port</h2>
+        <div class="form-group">
+          <label>API Host</label>
+          <input type="text" id="server_host" placeholder="0.0.0.0">
+        </div>
+        <div class="form-group">
+          <label>Port</label>
+          <input type="number" id="server_port" placeholder="12345">
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">🤖 Router Modelle</div>
+    <div class="grid">
+      <div class="card">
+        <h2>Router Model</h2>
+        <div class="form-group">
+          <label>Wähle ein Modell</label>
+          <select id="router_model"></select>
+        </div>
+        <div class="form-group">
+          <label>Context Window</label>
+          <input type="number" id="router_context" placeholder="100000">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Judge Model</h2>
+        <div class="form-group">
+          <label>Wähle ein Modell</label>
+          <select id="judge_model"></select>
+        </div>
+        <div class="form-group">
+          <label>Context Window</label>
+          <input type="number" id="judge_context" placeholder="262144">
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">🔗 Upstreams</div>
+    <div class="grid">
+      <div class="card">
+        <h2>Local Upstream</h2>
+        <div id="local_upstream" class="upstream-item">
+          <div class="form-group">
+            <label>Provider</label>
+            <input type="text" id="local_provider" placeholder="lm_studio">
+          </div>
+          <div class="form-group">
+            <label>Base URL</label>
+            <input type="text" id="local_base_url" placeholder="http://localhost:1234">
+          </div>
+          <div class="form-group">
+            <label>Timeout (Sekunden)</label>
+            <input type="number" id="local_timeout" placeholder="120">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Deep Upstream</h2>
+        <div id="deep_upstream" class="upstream-item">
+          <div class="form-group">
+            <label>Provider</label>
+            <input type="text" id="deep_provider" placeholder="openai">
+          </div>
+          <div class="form-group">
+            <label>Base URL</label>
+            <input type="text" id="deep_base_url" placeholder="https://api.openai.com">
+          </div>
+          <div class="form-group">
+            <label>Timeout (Sekunden)</label>
+            <input type="number" id="deep_timeout" placeholder="180">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">🛤️ Routing</div>
+    <div class="grid">
+      <div class="card">
+        <h2>Fallback & Hybrid</h2>
+        <label class="toggle">
+          <input type="checkbox" id="routing_fallback_enabled">
+          <span class="toggle-label">Fallback enabled</span>
+        </label>
+        <label class="toggle" style="margin-top: 8px;">
+          <input type="checkbox" id="routing_hybrid_client_model_override">
+          <span class="toggle-label">Hybrid client model override</span>
+        </label>
+        <div class="form-group" style="margin-top: 12px;">
+          <label>Judge Timeout (Sekunden)</label>
+          <input type="number" id="judge_timeout" placeholder="15">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Router Identity</h2>
+        <div class="form-group">
+          <label>Exposed Model Name</label>
+          <input type="text" id="exposed_model_name" placeholder="borg-cpu">
+        </div>
+        <label class="toggle" style="margin-top: 8px;">
+          <input type="checkbox" id="publish_underlying_models" {str(cfg.router_identity.publish_underlying_models).lower()}>
+          <span class="toggle-label">Publish underlying models</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="section-title">🔧 Heuristics</div>
+    <div class="grid">
+      <div class="card">
+        <h2>Token Thresholds</h2>
+        <div class="form-group">
+          <label>Large Prompt Token Threshold</label>
+          <input type="number" id="large_prompt_threshold" placeholder="2200">
+        </div>
+        <div class="form-group">
+          <label>Large Max Tokens Threshold</label>
+          <input type="number" id="large_max_tokens_threshold" placeholder="1800">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Judge Settings</h2>
+        <div class="form-group">
+          <label>Judge Temperature</label>
+          <input type="number" id="judge_temperature" placeholder="0.0" step="0.1">
+        </div>
+        <div class="form-group">
+          <label>Judge Max Tokens</label>
+          <input type="number" id="judge_max_tokens" placeholder="512">
+        </div>
+        <div class="form-group">
+          <label>Judge Prompt Context Chars</label>
+          <input type="number" id="judge_prompt_context_chars" placeholder="6000">
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">🌐 API Endpoints</div>
+    <div class="grid">
+      <div class="card">
+        <h2>Client Model Override</h2>
+        <div class="form-group">
+          <label>Small Models (JSON Array)</label>
+          <input type="text" id="small_models" placeholder='["small"]'>
+        </div>
+      </div>
+    </div>
+
+    <footer style="text-align: center; padding: 24px; color: var(--muted); font-size: 13px;">
+      <p>💡 Tipp: Ändere die Einstellungen und klicke auf "Speichern" um den Router neu zu starten.</p>
+    </footer>
+  </div>
+
+  <script>
+    const API_BASE = "{_admin_base_url(server.host, server.port)}";
+    let token = "";
+
+    function headers(contentType = "text/plain") {{
+      const h = {{}};
+      if (contentType) h["Content-Type"] = contentType;
+      if (token) h["Authorization"] = "Bearer " + token;
+      return h;
+    }}
+
+    async function loadConfig() {{
+      try {{
+        const res = await fetch(`${{API_BASE}}/admin/config`, {{ headers: headers() }});
+        const txt = await res.text();
+        document.getElementById("statusDot").className = "status-dot " + (res.ok ? "" : "error");
+        document.getElementById("statusInfo").textContent = res.ok ? "✅ Config loaded successfully!" : "❌ " + txt;
+
+        // Parse YAML and populate fields
+        try {{
+          const config = await parseYaml(txt);
+          if (!config) {{
+            setField("server_host", server.host);
+            setField("server_port", server.port);
+            setModel("router_model", "{{models}}");
+            setModel("judge_model", "{{models}}");
+            setJsonField("small_models", config.models);
+            setField("judge_timeout", routing.judge_timeout_seconds);
+            setField("judge_temperature", routing.heuristics.judge_temperature);
+            setField("judge_max_tokens", routing.heuristics.judge_max_tokens);
+            setField("judge_prompt_context_chars", routing.heuristics.judge_prompt_context_chars);
+            setField("exposed_model_name", identity.exposed_model_name);
+            setField("large_prompt_threshold", routing.heuristics.large_prompt_token_threshold);
+            setField("large_max_tokens_threshold", routing.heuristics.large_max_tokens_threshold);
+            setField("routing_fallback_enabled", routing.fallback_enabled);
+            setField("routing_hybrid_client_model_override", routing.hybrid_client_model_override);
+            document.getElementById("publish_underlying_models").checked = identity.publish_underlying_models;
+            document.getElementById("local_provider").value = config.upstreams.local.provider;
+            document.getElementById("local_base_url").value = config.upstreams.local.base_url;
+            document.getElementById("local_timeout").value = config.upstreams.local.timeout_seconds;
+            document.getElementById("deep_provider").value = config.upstreams.deep.provider;
+            document.getElementById("deep_base_url").value = config.upstreams.deep.base_url;
+            document.getElementById("deep_timeout").value = config.upstreams.deep.timeout_seconds;
+          }}
+        }} catch (e) {{
+          console.error("YAML parse failed:", e);
+          document.getElementById("statusInfo").textContent = "⚠️ Failed to parse YAML";
+        }}
+      }} catch (err) {{
+        document.getElementById("statusInfo").textContent = "❌ " + err.message;
+      }}
+    }}
+
+    async function saveConfig() {{
+      // Collect all values
+      const data = collectFormData();
+      if (Object.keys(data).length === 0) {{
+        return Swal.fire("⚠️", "Keine Änderungen gefunden", "warning");
+      }}
+
+      try {{
+        const yaml = yamlify(data);
+        const res = await fetch(`${{API_BASE}}/admin/config`, {{
+          method: "PUT",
+          headers: headers("application/yaml"),
+          body: yaml
+        }});
+
+        if (res.ok) {{
+          document.getElementById("statusDot").className = "status-dot";
+          document.getElementById("statusInfo").textContent = "✅ Config saved! Router wird neu gestartet...";
+          setTimeout(() => window.location.reload(), 2000);
+          Swal.fire({{
+            icon: "success",
+            title: "Saved!",
+            text: "Der Router wurde erfolgreich gespeichert und wird neu gestartet.",
+            confirmButtonText: "OK"
+          }});
+        }} else {{
+          document.getElementById("statusInfo").textContent = "❌ Save failed";
+          Swal.fire("❌", "Speichern fehlgeschlagen", "error");
+        }}
+      }} catch (err) {{
+        document.getElementById("statusInfo").textContent = "❌ " + err.message;
+      }}
+    }}
+
+    function setField(name, value) {{
+      const el = document.getElementById(name);
+      if (el) {{
+        el.value = value;
+      }}
+    }}
+
+    function setModel(name, value) {{
+      const el = document.getElementById(name);
+      if (el && value) {{
+        const parts = value.split(",");
+        el.value = parts.join(", ");
+      }}
+    }}
+
+    function setJsonField(name, value) {{
+      try {{
+        const json = JSON.stringify(value);
+        const el = document.getElementById(name);
+        if (el) el.value = json;
+      }} catch (e) {{
+        console.error("JSON stringify failed:", e);
+      }}
+    }}
+
+    function collectFormData() {{
+      const data = {{}};
+      // Simple field collection
+      const fields = document.querySelectorAll("input[type='text'], input[type='number'], select");
+      fields.forEach(f => {{
+        if (f.id) {{
+          const value = f.value;
+          const name = f.id;
+          if (value && value.trim()) {{
+            try {{
+              const parsed = JSON.parse(value);
+              data[name] = parsed;
+            }} catch (e) {{
+              data[name] = value.trim();
+            }}
+          }}
+        }}
+      }});
+
+      // Toggles
+      document.querySelectorAll(".toggle input[type='checkbox']").forEach(t => {{
+        if (t.id) {{
+          data[t.id] = t.checked;
+        }}
+      }});
+
+      return data;
+    }}
+
+    function yamlify(data) {{
+      // Simple YAML generation
+      const lines = [];
+      const indent = 2;
+
+      function indentLines(arr, level) {{
+        return arr.map(line => "  ".repeat(level) + line).join("\\n");
+      }}
+
+      function toYamlValue(v) {{
+        if (typeof v === "string" && (v.includes("://") || v.includes(".") || /^[\\d\\.,\\-+]+\\s*$/.test(v))) {{
+          return \`'${{v}}'\`;
+        }}
+        return String(v);
+      }}
+
+      function renderSection(prefix, obj) {{
+        if (!obj) return "";
+        const lines = [];
+        for (const key in obj) {{
+          if (obj.hasOwnProperty(key)) {{
+            const value = obj[key];
+            const keyPath = prefix ? `${{prefix}}.${{key}}` : key;
+            let val = toYamlValue(value);
+            lines.push(`${{keyPath}}: ${{val}}`);
+          }}
+        }}
+        return lines.join("\\n");
+      }}
+
+      lines.push("server:");
+      lines.push(`  host: ${{toYamlValue(data.server_host)}}`);
+      lines.push(`  port: ${{data.server_port}}`);
+      lines.push("models:");
+      const models = data.models || {{}};
+      const modelKeys = Object.keys(models);
+      modelKeys.forEach(k => {{
+        const m = models[k];
+        lines.push(`  ${{k}}:`);
+        lines.push(`    model_id: ${{m.model_id}}`);
+        lines.push(`    context_window: ${{m.context_window || 100000}}`);
+        lines.push(`    upstream_ref: local`);
+        lines.push(`    supports_thinking: ${{m.supports_thinking || "true"}}`);
+      }});
+      lines.push("upstreams:");
+      lines.push("  local:");
+      lines.push(`    provider: lm_studio`);
+      lines.push(`    base_url: ${{data.local_base_url}}`);
+      lines.push(`    timeout_seconds: ${{data.local_timeout}}`);
+      lines.push(`    api_key_env: OPENAI_API_KEY`);
+      lines.push("  deep:");
+      lines.push(`    provider: openai`);
+      lines.push(`    base_url: ${{data.deep_base_url}}`);
+      lines.push(`    timeout_seconds: ${{data.deep_timeout}}`);
+      lines.push("routing:");
+      lines.push(`  judge_timeout_seconds: ${{data.judge_timeout}}`);
+      lines.push(`  fallback_enabled: ${{data.routing_fallback_enabled}}`);
+      lines.push(`  hybrid_client_model_override: ${{data.routing_hybrid_client_model_override}}`);
+      lines.push("router_identity:");
+      lines.push(`  exposed_model_name: ${{toYamlValue(data.exposed_model_name)}}`);
+      lines.push(`  publish_underlying_models: ${{data.publish_underlying_models}}`);
+      lines.push("models:");
+      if (data.small_models) {{
+        try {{
+          const sm = JSON.parse(data.small_models);
+          lines.push(`  ${{sm[0] || "small"}}:`);
+          lines.push(`    model_id: qwen/qwen3.5-9b`);
+          lines.push(`    context_window: 100000`);
+          lines.push(`    upstream_ref: local`);
+          lines.push(`    supports_thinking: true`);
+        }} catch (e) {{
+          // skip
+        }}
+      }}
+      lines.push("heuristics:");
+      lines.push(`  large_prompt_token_threshold: ${{data.large_prompt_threshold}}`);
+      lines.push(`  large_max_tokens_threshold: ${{data.large_max_tokens_threshold}}`);
+      lines.push(`  judge_temperature: ${{data.judge_temperature}}`);
+      lines.push(`  judge_max_tokens: ${{data.judge_max_tokens}}`);
+      lines.push(`  judge_prompt_context_chars: ${{data.judge_prompt_context_chars}}`);
+
+      return lines.join("\\n");
+    }}
+
+    async function parseYaml(txt) {{
+      try {{
+        return await (await fetch(API_BASE + "/admin/config")).text();
+      }} catch (e) {{ return null; }}
+    }}
+
+    // Initialize on load
+    window.addEventListener("load", () => {{ loadConfig(); }});
+  </script>
+</body>
+</html>"""
+
+    return html
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="LM Router")
     parser.add_argument("--tray", action="store_true", help="Run with system tray icon and controls")
+    parser.add_argument("--log-level", type=str, default="DEBUG", help="Log level: DEBUG, INFO, WARNING, ERROR (default: DEBUG)")
     return parser.parse_args()
 
 
@@ -3589,13 +4582,23 @@ app = create_app()
 
 def main() -> None:
     import uvicorn
+    import os
 
     args = _parse_args()
+
+    # Logging-Ebene: Argument oder Environment-Variable
+    log_level = args.log_level.upper() if hasattr(args, "log_level") else os.getenv("ROUTER_LOG_LEVEL", "DEBUG")
+    level = getattr(logging, log_level, logging.DEBUG)
+    logger.debug("Starting app with log_level=%s", log_level)
+
     runtime_cfg = app.state.config_store.get_config()
+    logger.debug("Config loaded: server=%s:%s", runtime_cfg.server.host, runtime_cfg.server.port)
 
     if args.tray:
+        logger.debug("Running in tray mode")
         run_with_tray(app)
     else:
+        logger.debug("Running as standalone HTTP server")
         uvicorn.run(
             app,
             host=runtime_cfg.server.host,

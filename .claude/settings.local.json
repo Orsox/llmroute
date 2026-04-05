@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(mv:*)",
+      "Bash(sed:*)",
+      "Bash(python -c \"from llmrouter.config_gui import ConfigGuiWindow; print\\('Import erfolgreich'\\)\")",
+      "Bash(python -c \"import PyQt6; print\\('PyQt6 verfügbar'\\)\")"
     ]
   }
 }

@@ -1,4 +1,6 @@
-﻿from pathlib import Path
+﻿import json
+import logging
+from pathlib import Path
 
 import pytest
 import yaml
@@ -817,3 +819,23 @@ def test_model_availability_endpoint_flags_missing_models(cfg_file: Path) -> Non
         large = next(item for item in body["models"] if item["alias"] == "large")
         assert large["available"] is False
         assert large["loaded"] is False
+
+
+def test_route_analytics_logs_prompt_fields(cfg_file: Path, caplog: pytest.LogCaptureFixture) -> None:
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+    payload = {
+        "messages": [{"role": "user", "content": "Bitte analysiere das Routing fuer diesen Prompt."}],
+        "max_tokens": 120,
+    }
+
+    caplog.set_level(logging.INFO, logger="llm-router")
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 200
+
+    route_logs = [r.getMessage() for r in caplog.records if r.getMessage().startswith("route_analytics ")]
+    assert route_logs
+    analytics = json.loads(route_logs[-1].split(" ", 1)[1])
+    assert analytics["prompt_text"] == "Bitte analysiere das Routing fuer diesen Prompt."
+    assert analytics["user_prompt_text"] == "Bitte analysiere das Routing fuer diesen Prompt."
+    assert analytics["latest_user_prompt_text"] == "Bitte analysiere das Routing fuer diesen Prompt."
