@@ -1,5 +1,6 @@
 ﻿import json
 import logging
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ from llmrouter.app import (
     UnifiedRequest,
     anthropic_to_openai_payload,
     create_app,
+    normalize_anthropic_messages,
     normalize_openai_chat,
 )
 
@@ -59,11 +61,16 @@ def _write_config(
             "fallback_enabled": True,
             "hybrid_client_model_override": True,
             "default_temperature": default_temperature,
+            "analytics_enabled": True,
+            "analytics_sqlite_path": str(path.parent / "router_analytics.sqlite"),
             "heuristics": {
                 "large_prompt_token_threshold": 1200,
                 "large_max_tokens_threshold": 700,
                 "judge_temperature": 0.0,
                 "judge_max_tokens": 32,
+                "judge_prompt_context_chars": 1200,
+                "lightweight_max_tokens_cap": 384,
+                "suspect_default_max_tokens_threshold": 2048,
             },
         },
         "router_identity": {
@@ -113,6 +120,7 @@ class FakeLMClient:
         self.calls: list[tuple[str, str]] = []
         self.fail_first_small = fail_first_small
         self.failed_once = False
+        self.last_judge_payload: dict | None = None
 
     async def post_json(self, settings: LMStudioSettings, path: str, payload: dict):
         model = payload.get("model", "")
@@ -122,6 +130,7 @@ class FakeLMClient:
         if messages and isinstance(messages, list):
             first = messages[0]
             if isinstance(first, dict) and "router judge" in str(first.get("content", "")).lower():
+                self.last_judge_payload = dict(payload)
                 return {
                     "choices": [
                         {
@@ -290,6 +299,35 @@ def test_normalize_openai_chat_detects_vision_and_tooluse() -> None:
     assert req.required_capabilities == {"chat", "vision", "tooluse"}
 
 
+def test_normalize_anthropic_messages_strips_wrapper_noise_for_routing() -> None:
+    payload = {
+        "model": "borg-cpu",
+        "max_tokens": 32000,
+        "tools": [{"name": "weather_lookup", "input_schema": {"type": "object", "properties": {}}}],
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "<local-command-caveat>Caveat</local-command-caveat>\n"
+                            "<command-name>/model</command-name>\n"
+                            "<local-command-stdout>Set model to borg-cpu</local-command-stdout>\n"
+                            "hallo"
+                        ),
+                    }
+                ],
+            }
+        ],
+    }
+    req = normalize_anthropic_messages(payload)
+    assert req.latest_user_prompt_text.endswith("hallo")
+    assert req.routing_latest_user_prompt_text == "hallo"
+    assert req.has_wrapper_noise is True
+    assert req.tool_loop_context is False
+
+
 @pytest.mark.asyncio
 async def test_choose_route_large_when_small_context_is_not_enough(cfg_file: Path) -> None:
     _write_config(cfg_file, small_context=500)
@@ -417,6 +455,115 @@ async def test_choose_route_uses_small_model_as_judge_for_multi_candidate(cfg_fi
     _ = await service.choose_route(cfg, req)
     assert lm.calls
     assert lm.calls[0] == ("/v1/chat/completions", "qwen/qwen3-vl-8b")
+
+
+@pytest.mark.asyncio
+async def test_choose_route_prefers_small_for_light_anthropic_tool_request_with_wrapper_noise(cfg_file: Path) -> None:
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=FakeLMClient())
+    cfg = service.config_store.get_config()
+    req = normalize_anthropic_messages(
+        {
+            "model": "borg-cpu",
+            "stream": True,
+            "max_tokens": 32000,
+            "tools": [{"name": "weather_lookup", "input_schema": {"type": "object", "properties": {}}}],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "<local-command-caveat>Caveat</local-command-caveat>\n"
+                                "<command-name>/model</command-name>\n"
+                                "<local-command-stdout>Set model to borg-cpu</local-command-stdout>\n"
+                                "hallo"
+                            ),
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    decision = await service.choose_route(cfg, req)
+    assert decision.selected_alias == "small"
+    assert decision.routing_max_tokens_budget == 384
+    assert decision.routing_latest_user_prompt_text == "hallo"
+
+
+@pytest.mark.asyncio
+async def test_judge_prompt_uses_sanitized_latest_user_text(cfg_file: Path) -> None:
+    lm = FakeLMClient()
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=lm)
+    cfg = service.config_store.get_config()
+    req = normalize_anthropic_messages(
+        {
+            "model": "borg-cpu",
+            "stream": True,
+            "max_tokens": 32000,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "<local-command-caveat>Caveat</local-command-caveat>\n"
+                                "<command-name>/model</command-name>\n"
+                                "<local-command-stdout>Set model to borg-cpu</local-command-stdout>\n"
+                                "hallo"
+                            ),
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    _ = await service.choose_route(cfg, req)
+    assert lm.last_judge_payload is not None
+    judge_body = json.loads(lm.last_judge_payload["messages"][1]["content"])
+    assert judge_body["latest_user_prompt_excerpt"] == "hallo"
+
+
+@pytest.mark.asyncio
+async def test_choose_route_keeps_large_for_real_tool_loop_context(cfg_file: Path) -> None:
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=FakeLMClient())
+    cfg = service.config_store.get_config()
+    req = normalize_anthropic_messages(
+        {
+            "model": "borg-cpu",
+            "stream": True,
+            "max_tokens": 32000,
+            "tools": [{"name": "file_read", "input_schema": {"type": "object", "properties": {}}}],
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "toolu_1",
+                            "name": "file_read",
+                            "input": {"path": "app.py"},
+                        }
+                    ],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_1",
+                            "content": [{"type": "text", "text": "def main(): pass"}],
+                        },
+                        {"type": "text", "text": "Bitte erklaere mir den Code."},
+                    ],
+                },
+            ],
+        }
+    )
+    decision = await service.choose_route(cfg, req)
+    assert decision.selected_alias == "large"
+    assert decision.tool_loop_context is True
 
 
 @pytest.mark.asyncio
@@ -853,8 +1000,97 @@ def test_route_analytics_logs_prompt_fields(cfg_file: Path, caplog: pytest.LogCa
         route_logs = [r.message for r in caplog.records if "route_analytics" in r.message]
         assert route_logs
         analytics = json.loads(route_logs[-1].split(" ", 1)[1])
+        assert analytics["request_id"]
         assert analytics["prompt_text"] == "Bitte analysiere das Routing fuer diesen Prompt."
         assert analytics["user_prompt_text"] == "Bitte analysiere das Routing fuer diesen Prompt."
         assert analytics["latest_user_prompt_text"] == "Bitte analysiere das Routing fuer diesen Prompt."
+        assert analytics["routing_latest_user_prompt_text"] == "Bitte analysiere das Routing fuer diesen Prompt."
     finally:
         app_logger.propagate = original_propagate
+
+
+def test_route_analytics_writes_sqlite_record(cfg_file: Path) -> None:
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+    payload = {
+        "model": "borg-cpu",
+        "stream": True,
+        "max_tokens": 32000,
+        "tools": [{"name": "weather_lookup", "input_schema": {"type": "object", "properties": {}}}],
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "<local-command-caveat>Caveat</local-command-caveat>\n"
+                            "<local-command-stdout>Set model to borg-cpu</local-command-stdout>\n"
+                            "hallo"
+                        ),
+                    }
+                ],
+            }
+        ],
+    }
+
+    with client.stream("POST", "/v1/messages", json=payload) as resp:
+        assert resp.status_code == 200
+        _ = "".join(resp.iter_text())
+        request_id = resp.headers["x-request-id"]
+
+    db_path = cfg_file.parent / "router_analytics.sqlite"
+    conn = sqlite3.connect(db_path)
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM routing_runs WHERE request_id = ?", (request_id,)).fetchone()[0]
+        row = conn.execute(
+            """
+            SELECT selected_alias, expected_route_class, routing_efficiency_label,
+                   routing_latest_user_text, routing_input_tokens, full_input_tokens,
+                   output_text_chars, latency_ms
+            FROM routing_runs
+            WHERE request_id = ?
+            """,
+            (request_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert count == 1
+    assert row is not None
+    assert row[0] == "small"
+    assert row[1] == "small"
+    assert row[2] == "good_fit"
+    assert row[3] == "hallo"
+    assert row[4] < row[5]
+    assert row[6] is not None
+    assert row[7] is not None
+
+
+def test_route_analytics_marks_oversized_route_when_large_handles_greeting(cfg_file: Path) -> None:
+    _write_config(cfg_file, small_context=10)
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+    payload = {
+        "model": "borg-cpu",
+        "max_tokens": 120,
+        "messages": [{"role": "user", "content": [{"type": "text", "text": "hallo"}]}],
+    }
+
+    resp = client.post("/v1/messages", json=payload)
+    assert resp.status_code == 200
+    request_id = resp.headers["x-request-id"]
+
+    conn = sqlite3.connect(cfg_file.parent / "router_analytics.sqlite")
+    try:
+        row = conn.execute(
+            "SELECT selected_alias, routing_efficiency_label, routing_efficiency_score FROM routing_runs WHERE request_id = ?",
+            (request_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row is not None
+    assert row[0] == "large"
+    assert row[1] == "oversized_route"
+    assert row[2] < 100

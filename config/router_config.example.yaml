@@ -25,12 +25,16 @@ routing:
   fallback_enabled: true
   hybrid_client_model_override: true
   default_temperature: null
+  analytics_enabled: true
+  analytics_sqlite_path: logs/router_analytics.sqlite
   heuristics:
     large_prompt_token_threshold: 2200
     large_max_tokens_threshold: 1800
     judge_temperature: 0.0
     judge_max_tokens: 512
     judge_prompt_context_chars: 6000
+    lightweight_max_tokens_cap: 768
+    suspect_default_max_tokens_threshold: 8192
 router_identity:
   exposed_model_name: borg-cpu
   publish_underlying_models: true
