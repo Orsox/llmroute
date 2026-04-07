@@ -6,6 +6,8 @@ import hashlib
 import logging
 import math
 import os
+import sys
+import platform
 import re
 import threading
 import time
@@ -91,6 +93,8 @@ load_dotenv(PROJECT_ROOT / ".env", override=False)
 DEFAULT_CONFIG_PATH = Path(os.getenv("ROUTER_CONFIG_PATH", "config/router_config.yaml"))
 WINDOWS_STARTUP_REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
 WINDOWS_STARTUP_VALUE_NAME = "LMRouterTray"
+LINUX_STARTUP_DIR = Path("~/.config/autostart").expanduser()
+LINUX_STARTUP_FILE_NAME = "llmrouter.desktop"
 START_SCRIPT_RELATIVE_PATH = Path("scripts/start_llm_router.ps1")
 CODING_SYNTAX_RE = re.compile(
     r"```|^\s*(def|class|function|import|from|select|insert|update|delete)\b|traceback|stack\s*trace",
@@ -3064,6 +3068,98 @@ def _get_windows_startup_status() -> dict[str, Any]:
     }
 
 
+def _get_linux_startup_status() -> dict[str, Any]:
+    if platform.system() != "Linux":
+        return {
+            "supported": False,
+            "enabled": False,
+            "reason": "linux_only",
+        }
+
+    desktop_file = LINUX_STARTUP_DIR / LINUX_STARTUP_FILE_NAME
+    enabled = desktop_file.exists()
+    
+    # Versuche den aktuellen Befehl aus der .desktop Datei zu lesen
+    current_command = None
+    if enabled:
+        try:
+            content = desktop_file.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                if line.startswith("Exec="):
+                    current_command = line[5:].strip()
+                    break
+        except Exception as exc:
+            logger.error("Failed to read linux desktop file: %s", exc)
+
+    # Erwarteter Befehl
+    python_exe = sys.executable
+    project_dir = _project_root()
+    run_py = project_dir / "run.py"
+    expected_command = f"{python_exe} {run_py}"
+
+    return {
+        "supported": True,
+        "enabled": enabled,
+        "desktop_file": str(desktop_file),
+        "command": expected_command,
+        "current_command": current_command,
+    }
+
+
+def _set_linux_startup_enabled(enabled: bool) -> dict[str, Any]:
+    if platform.system() != "Linux":
+        raise HTTPException(status_code=400, detail="Linux startup is only supported on Linux.")
+
+    desktop_file = LINUX_STARTUP_DIR / LINUX_STARTUP_FILE_NAME
+    
+    if enabled:
+        LINUX_STARTUP_DIR.mkdir(parents=True, exist_ok=True)
+        python_exe = sys.executable
+        project_dir = _project_root()
+        run_py = project_dir / "run.py"
+        icon_path = project_dir / "assets" / "llmrouter_route_icon.png"
+        
+        content = f"""[Desktop Entry]
+Type=Application
+Name=LM Router
+Comment=Startet den LM Router im System Tray
+Exec={python_exe} {run_py}
+Icon={icon_path if icon_path.exists() else ""}
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+"""
+        desktop_file.write_text(content, encoding="utf-8")
+        # Ausführbar machen
+        try:
+            desktop_file.chmod(0o755)
+        except Exception:
+            pass
+    else:
+        if desktop_file.exists():
+            desktop_file.unlink()
+
+    return _get_linux_startup_status()
+
+
+def _get_startup_status() -> dict[str, Any]:
+    system = platform.system()
+    if system == "Windows":
+        return _get_windows_startup_status()
+    if system == "Linux":
+        return _get_linux_startup_status()
+    return {"supported": False, "enabled": False, "reason": "unsupported_os"}
+
+
+def _set_startup_enabled(enabled: bool) -> dict[str, Any]:
+    system = platform.system()
+    if system == "Windows":
+        return _set_windows_startup_enabled(enabled)
+    if system == "Linux":
+        return _set_linux_startup_enabled(enabled)
+    raise HTTPException(status_code=400, detail=f"Startup not supported on {system}")
+
+
 def _set_windows_startup_enabled(enabled: bool) -> dict[str, Any]:
     if os.name != "nt":
         raise HTTPException(status_code=400, detail="Windows startup is only supported on Windows.")
@@ -3713,6 +3809,18 @@ def create_app(
             }
         )
 
+    @app.get("/admin/startup")
+    async def admin_get_startup(request: Request) -> JSONResponse:
+        await require_auth(request)
+        return JSONResponse(_get_startup_status())
+
+    @app.put("/admin/startup")
+    async def admin_put_startup(request: Request) -> JSONResponse:
+        await require_auth(request)
+        payload = WindowsStartupToggleRequest.model_validate(await request.json())
+        status = _set_startup_enabled(payload.enabled)
+        return JSONResponse(status)
+
     @app.get("/admin/windows-startup")
     async def admin_get_windows_startup(request: Request) -> JSONResponse:
         await require_auth(request)
@@ -3836,6 +3944,58 @@ class RouterServerController:
         return not bool(getattr(server, "started", False)) and not bool(getattr(server, "should_exit", False))
 
 
+def _get_tray_icon_path(is_running: bool) -> Optional[str]:
+    """
+    Unter Linux (Ubuntu/AppIndicator) ist es oft besser, einen Pfad zu einer Datei zu verwenden.
+    Wir generieren hier ein optimiertes Icon mit Transparenz in /tmp, falls nötig,
+    oder geben den Pfad zum Asset zurück.
+    """
+    asset_dir = _project_root() / "assets"
+    status_icon_name = "llmrouter_route_icon_running.png" if is_running else "llmrouter_route_icon_stopped.png"
+    status_icon_path = asset_dir / status_icon_name
+    main_icon_path = asset_dir / "llmrouter_route_icon.png"
+
+    # Wir versuchen, das Icon zu optimieren (Hintergrund entfernen), 
+    # damit es im Ubuntu Panel (oft dunkel) nicht als schwarzer Block erscheint.
+    try:
+        from PIL import Image
+        src_path = status_icon_path if status_icon_path.exists() else main_icon_path
+        if not src_path.exists():
+            return None
+            
+        # Temporärer Pfad für das optimierte Icon
+        import tempfile
+        tmp_dir = Path(tempfile.gettempdir())
+        target_path = tmp_dir / f"llmrouter_tray_{'run' if is_running else 'stop'}.png"
+        
+        # Nur neu generieren, wenn nicht vorhanden oder alt
+        if not target_path.exists():
+            img = Image.open(src_path).convert("RGBA")
+            # Die Assets haben aktuell einen fast schwarzen Hintergrund (11, 18, 32).
+            # Wir machen alles, was sehr dunkel ist, transparent.
+            data = img.getdata()
+            new_data = []
+            for item in data:
+                # Wenn R, G, B alle < 40 sind, machen wir es transparent
+                if item[0] < 45 and item[1] < 45 and item[2] < 45:
+                    new_data.append((0, 0, 0, 0))
+                else:
+                    new_data.append(item)
+            img.putdata(new_data)
+            # Auf Standard-Tray-Größe skalieren (22x22 ist üblich für Linux)
+            img = img.resize((22, 22), Image.Resampling.LANCZOS)
+            img.save(target_path)
+            
+        return str(target_path)
+    except Exception as exc:
+        logger.error("Failed to optimize tray icon for Linux: %s", exc)
+        if status_icon_path.exists():
+            return str(status_icon_path)
+        if main_icon_path.exists():
+            return str(main_icon_path)
+    return None
+
+
 def _build_tray_icon(is_running: bool):
     try:
         from PIL import Image, ImageDraw
@@ -3844,12 +4004,22 @@ def _build_tray_icon(is_running: bool):
         return None
 
     size = 64
-    asset_path = _project_root() / "assets" / "llmrouter_route_icon.png"
     indicator = "#22c55e" if is_running else "#ef4444"
+    asset_dir = _project_root() / "assets"
+    
+    # Versuche, das status-spezifische Icon zu laden
+    status_icon_name = "llmrouter_route_icon_running.png" if is_running else "llmrouter_route_icon_stopped.png"
+    status_icon_path = asset_dir / status_icon_name
+    main_icon_path = asset_dir / "llmrouter_route_icon.png"
 
     try:
-        if asset_path.exists():
-            image = Image.open(asset_path).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+        if status_icon_path.exists():
+            image = Image.open(status_icon_path).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+        elif main_icon_path.exists():
+            image = Image.open(main_icon_path).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+            # Zeichne einen Punkt, wenn nur das Haupt-Icon da ist
+            draw = ImageDraw.Draw(image)
+            draw.ellipse((45, 45, 61, 61), fill=indicator, outline="#ffffff", width=2)
         else:
             image = Image.new("RGBA", (size, size), "#0b1220")
             draw = ImageDraw.Draw(image)
@@ -3859,9 +4029,9 @@ def _build_tray_icon(is_running: bool):
             draw.line(path_points, fill="#38bdf8", width=6, joint="curve")
             for px, py in [(14, 46), (37, 34), (50, 18)]:
                 draw.ellipse((px - 4, py - 4, px + 4, py + 4), fill="#f8fafc", outline="#0ea5e9", width=1)
+            # Zeichne Status-Punkt auf das generierte Icon
+            draw.ellipse((45, 45, 61, 61), fill=indicator, outline="#ffffff", width=2)
 
-        draw = ImageDraw.Draw(image)
-        draw.ellipse((45, 45, 61, 61), fill=indicator, outline="#ffffff", width=2)
         return image
     except Exception as exc:
         logger.exception("Failed to build tray icon: %s", exc)
@@ -3897,7 +4067,32 @@ def run_with_tray(app_instance: FastAPI) -> None:
     logger.debug("Router server controller started, running=%s", controller.is_running())
 
     # Initiales Icon-Bild erstellen
-    initial_icon = _build_tray_icon(controller.is_running())
+    is_linux = platform.system() == "Linux"
+    
+    def _get_current_icon():
+        is_running = controller.is_running()
+        icon_to_use = None
+        
+        if is_linux:
+            icon_path = _get_tray_icon_path(is_running)
+            if icon_path:
+                try:
+                    from PIL import Image
+                    icon_to_use = Image.open(icon_path).convert("RGBA")
+                except Exception as exc:
+                    logger.error("Failed to load optimized icon path: %s", exc)
+        
+        if not icon_to_use:
+            # Fallback auf PIL Image (für Windows oder wenn kein Pfad gefunden/ladbar)
+            icon_to_use = _build_tray_icon(is_running)
+            
+        if not icon_to_use:
+            from PIL import Image
+            icon_to_use = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+            
+        return icon_to_use
+
+    initial_icon = _get_current_icon()
     icon = pystray.Icon("llm-router", icon=initial_icon, title="LM Router")
     shutdown_event = threading.Event()
 
@@ -3955,9 +4150,7 @@ def run_with_tray(app_instance: FastAPI) -> None:
 
     def _refresh_icon() -> None:
         """Tray-Icon neu erstellen (benötigt wird, da pystray keine dynamischen Updates unterstützt)."""
-        is_running = controller.is_running()
-        new_icon = _build_tray_icon(is_running)
-        icon.icon = new_icon
+        icon.icon = _get_current_icon()
 
     icon.menu = pystray.Menu(
         pystray.MenuItem(status_text, lambda: None, enabled=False),
@@ -4289,8 +4482,19 @@ def _admin_settings_html(cfg: RouterConfig) -> str:
       </div>
     </div>
 
-    <div class="section-title">🛤️ Routing</div>
+    <div class="section-title">🛣️ Routing</div>
     <div class="grid">
+      <div class="card">
+        <h2>Autostart & System</h2>
+        <div class="form-group">
+          <label class="toggle">
+            <input type="checkbox" id="system_startup_enabled" onchange="toggleStartup()">
+            <span class="toggle-label">Autostart beim Systemstart aktivieren</span>
+          </label>
+          <div id="startup_info" style="font-size: 11px; color: var(--muted); margin-top: 8px;">Prüfe Status...</div>
+        </div>
+      </div>
+
       <div class="card">
         <h2>Fallback & Hybrid</h2>
         <label class="toggle">
@@ -4380,6 +4584,7 @@ def _admin_settings_html(cfg: RouterConfig) -> str:
 
     async function loadConfig() {{
       try {{
+        loadStartupStatus();
         const res = await fetch(`${{API_BASE}}/admin/config`, {{ headers: headers() }});
         const txt = await res.text();
         document.getElementById("statusDot").className = "status-dot " + (res.ok ? "" : "error");
@@ -4590,6 +4795,56 @@ def _admin_settings_html(cfg: RouterConfig) -> str:
       lines.push(`  judge_prompt_context_chars: ${{data.judge_prompt_context_chars}}`);
 
       return lines.join("\\n");
+    }}
+
+    async function loadStartupStatus() {{
+      try {{
+        const res = await fetch(`${{API_BASE}}/admin/startup`, {{ headers: headers() }});
+        if (res.ok) {{
+          const data = await res.json();
+          const checkbox = document.getElementById("system_startup_enabled");
+          checkbox.checked = data.enabled;
+          const info = document.getElementById("startup_info");
+          if (data.supported) {{
+            info.textContent = data.enabled ? "✅ Autostart ist aktiv." : "❌ Autostart ist inaktiv.";
+            if (data.command) info.title = "Befehl: " + data.command;
+          }} else {{
+            info.textContent = "⚠️ Nicht unterstützt: " + (data.reason || "Unbekannt");
+            checkbox.disabled = true;
+          }}
+        }}
+      }} catch (err) {{
+        console.error("Startup status load failed:", err);
+      }}
+    }}
+
+    async function toggleStartup() {{
+      const checkbox = document.getElementById("system_startup_enabled");
+      const enabled = checkbox.checked;
+      const info = document.getElementById("startup_info");
+      info.textContent = "Speichere...";
+      
+      try {{
+        const res = await fetch(`${{API_BASE}}/admin/startup`, {{
+          method: "PUT",
+          headers: headers("application/json"),
+          body: JSON.stringify({{ enabled: enabled }})
+        }});
+        if (res.ok) {{
+          const data = await res.json();
+          checkbox.checked = data.enabled;
+          info.textContent = data.enabled ? "✅ Autostart wurde aktiviert." : "❌ Autostart wurde deaktiviert.";
+          Swal.fire("Startup", data.enabled ? "Autostart aktiviert" : "Autostart deaktiviert", "success");
+        }} else {{
+          checkbox.checked = !enabled;
+          info.textContent = "❌ Fehler beim Speichern.";
+          Swal.fire("Fehler", "Autostart konnte nicht geändert werden.", "error");
+        }}
+      }} catch (err) {{
+        checkbox.checked = !enabled;
+        info.textContent = "❌ " + err.message;
+        Swal.fire("Fehler", err.message, "error");
+      }}
     }}
 
     async function parseYaml(txt) {{
