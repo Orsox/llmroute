@@ -9,7 +9,9 @@
       "Bash(python -c \"from llmrouter.config_gui import ConfigGuiWindow; print\\('Import erfolgreich'\\)\")",
       "Bash(python -c \"import PyQt6; print\\('PyQt6 verfügbar'\\)\")",
       "Bash(Get-ChildItem -Recurse -Filter app.py)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "WebSearch",
+      "WebFetch(domain:www.stm32cubecli.com)"
     ]
   }
 }

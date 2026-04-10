@@ -86,7 +86,7 @@ def _configure_logging() -> logging.Logger:
 
 
 logger = _configure_logging()
-_analytics_store: Optional["AnalyticsStore"] = None
+_analytics_store: Optional[Any] = None
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -143,8 +143,13 @@ DEEP_REASONING_RE = re.compile(
     r"risk|risiko|threat model|bedrohungsmodell|entscheidungsmatrix|grundsatz|"
     r"designentscheidung|governance|multi[- ]step|mehrstufig|reasoning|"
     r"fehleranalyse|root cause|ursachenanalyse|sicherheitskonzept|"
-    r"migrationsstrategie|rollout|validierungsstrategie"
-    r")\b",
+    r"migrationsstrategie|rollout|validierungsstrategie|"
+    r"stm32cubecli|stm32cube|cubecli|websearch|websuche|web search"
+    r")\b|https?://",
+    re.IGNORECASE,
+)
+WEBSEARCH_RE = re.compile(
+    r"\b(websearch|websuche|web search|performing.*web search|web search results)\b|https?://",
     re.IGNORECASE,
 )
 ROUTING_WRAPPER_TAG_RE = re.compile(

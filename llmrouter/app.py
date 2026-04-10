@@ -80,6 +80,15 @@ def create_app(
     async def lifespan(_app: FastAPI):
         await monitor.start()
         try:
+            cfg = store.get_config()
+            if service._is_deep_enabled(cfg):
+                try:
+                    deep_upstream = cfg.upstream_for_alias("deep")
+                    _, models = await service.lm_client.list_models(deep_upstream)
+                    model_ids = [m.get("id") for m in models if m.get("id")]
+                    logger.info("deep_route_enabled_models models=%s", model_ids)
+                except Exception as exc:
+                    logger.warning("deep_route_models_fetch_failed error=%s", exc)
             yield
         finally:
             await monitor.stop()

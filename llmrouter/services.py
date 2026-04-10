@@ -781,7 +781,7 @@ class RouterService:
         ).strip()
         if not text:
             return False
-        return bool(DEEP_REASONING_RE.search(text))
+        return bool(DEEP_REASONING_RE.search(text) or WEBSEARCH_RE.search(text))
 
     @staticmethod
     def _is_deep_enabled(cfg: RouterConfig) -> bool:
@@ -1254,7 +1254,15 @@ class RouterService:
         return self._is_deep_reasoning_request(req)
 
     async def _judge_alias(
-        self, cfg: RouterConfig, req: UnifiedRequest, candidates: Iterable[str]
+        self,
+        cfg: RouterConfig,
+        req: UnifiedRequest,
+        candidates: Iterable[str],
+        *,
+        is_deep_reasoning: bool = False,
+        is_websearch: bool = False,
+        is_commit_task: bool = False,
+        is_file_search: bool = False,
     ) -> tuple[Optional[str], Optional[bool]]:
         judge_alias = "small"
         judge_model = cfg.models[judge_alias].model_id
@@ -1262,11 +1270,13 @@ class RouterService:
         if len(candidate_list) <= 1:
             return candidate_list[0] if candidate_list else None, None
         logger.info(
-            "judge_start candidates=%s requested_model=%r est_input_tokens=%s est_total_tokens=%s",
+            "judge_start candidates=%s requested_model=%r est_input_tokens=%s est_total_tokens=%s is_deep=%s is_websearch=%s",
             candidate_list,
             req.requested_model,
             req.routing_input_tokens,
             req.routing_estimated_total_tokens,
+            is_deep_reasoning,
+            is_websearch,
         )
         context_chars = max(500, cfg.routing.heuristics.judge_prompt_context_chars)
         latest_user_text = (
@@ -1299,6 +1309,12 @@ class RouterService:
                 "tool_loop_context": req.tool_loop_context,
                 "lightweight_greeting": bool(LIGHTWEIGHT_TASK_RE.match(latest_user_excerpt.strip())),
                 "requested_model": req.requested_model,
+                "heuristic_signals": {
+                    "is_deep_reasoning": is_deep_reasoning,
+                    "is_websearch": is_websearch,
+                    "is_commit_task": is_commit_task,
+                    "is_file_search": is_file_search,
+                },
             },
             "latest_user_prompt_excerpt": latest_user_excerpt,
             "recent_user_context_excerpt": recent_user_context,
@@ -1309,6 +1325,7 @@ class RouterService:
                     "context_window": cfg.models[alias].context_window,
                     "relative_speed": cfg.models[alias].relative_speed,
                     "suitable_for": cfg.models[alias].suitable_for,
+                    "capabilities": cfg.models[alias].capabilities,
                 }
                 for alias in candidate_list
             },
@@ -1318,7 +1335,8 @@ class RouterService:
                 "Short acknowledgements or greetings (e.g. 'hallo') should route to small.",
                 "Do not choose deep solely because prompt/max_tokens are large.",
                 "Use the latest actionable user ask, not wrapper noise, as the main routing signal.",
-                "Choose deep only for clear multi-step reasoning, strict rule compliance or high-risk decisions.",
+                "Choose deep only for clear multi-step reasoning, strict rule compliance, high-risk decisions or web-search.",
+                "Choose deep if the user explicitly asks for a web search or mentions stm32cube/cubecli related troubleshooting.",
                 "Choose large only when the latest user ask clearly requires stronger coding/programming depth.",
                 "Set thinking=on only if the selected route supports thinking and the task clearly benefits from it.",
                 "Never set thinking=on when tools/tool-use are required.",
@@ -1326,7 +1344,7 @@ class RouterService:
                 "Prefer small for tool-use flows when available.",
                 "Prefer small for file search / file lookup tasks when available.",
             ],
-            "policy": "Prefer small by default. Use large for regular coding tasks. Use deep only for explicitly complex/high-stakes reasoning.",
+            "policy": "Prefer small by default. Use large for regular coding tasks. Use deep only for explicitly complex/high-stakes reasoning or web-search.",
             "preference": "Prefer small by default.",
         }
         payload = {
@@ -1473,47 +1491,8 @@ class RouterService:
         if not self._is_router_public_model_name(cfg, req.requested_model):
             preferred_alias = self._find_alias_by_model_id(cfg, req.requested_model)
 
-        if req.tool_loop_context and "large" in candidates:
-            decision = self._make_route_decision(
-                req=req,
-                selected_alias="large",
-                reason="policy_tool_loop_large",
-                candidates=candidates,
-                thinking_requested=self._heuristic_thinking_requested(cfg, req, "large"),
-                judge_model_id=cfg.models["small"].model_id,
-                is_coding=is_coding,
-            )
-            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
-            return decision
-
-        small_policy_reason: Optional[str] = None
-        if is_commit_task and "small" in candidates:
-            small_policy_reason = "policy_commit_message_small"
-        elif (
-            req.needs_tooluse
-            and "small" in candidates
-            and (not is_coding or req.routing_estimated_total_tokens <= small_coding_task_limit)
-        ):
-            small_policy_reason = "policy_tooluse_small"
-        elif (
-            is_file_search
-            and "small" in candidates
-            and (not is_coding or req.routing_estimated_total_tokens <= small_coding_task_limit)
-        ):
-            small_policy_reason = "policy_file_search_small"
-
-        if small_policy_reason:
-            decision = self._make_route_decision(
-                req=req,
-                selected_alias="small",
-                reason=small_policy_reason,
-                candidates=candidates,
-                thinking_requested=self._heuristic_thinking_requested(cfg, req, "small"),
-                judge_model_id=cfg.models["small"].model_id,
-                is_coding=is_coding,
-            )
-            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
-            return decision
+        is_web = WEBSEARCH_RE.search(req.routing_user_prompt_text or "") is not None
+        is_deep = (self._is_deep_reasoning_request(req) or is_web) and self._is_deep_enabled(cfg)
 
         if len(candidates) == 1:
             selected = candidates[0]
@@ -1529,7 +1508,30 @@ class RouterService:
             logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
             return decision
 
-        judge_alias, judge_thinking_requested = await self._judge_alias(cfg, req, candidates)
+        if (is_deep or is_web) and "deep" in candidates:
+            selected = "deep"
+            reason = "policy_deep_reasoning_or_websearch"
+            decision = self._make_route_decision(
+                req=req,
+                selected_alias=selected,
+                reason=reason,
+                candidates=candidates,
+                thinking_requested=self._heuristic_thinking_requested(cfg, req, selected),
+                judge_model_id=cfg.models["small"].model_id,
+                is_coding=is_coding,
+            )
+            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
+            return decision
+
+        judge_alias, judge_thinking_requested = await self._judge_alias(
+            cfg,
+            req,
+            candidates,
+            is_deep_reasoning=is_deep,
+            is_websearch=is_web,
+            is_commit_task=is_commit_task,
+            is_file_search=is_file_search,
+        )
         if judge_alias and judge_alias in candidates:
             selected = judge_alias
             reason = f"judge_{judge_alias}"

@@ -591,7 +591,7 @@ async def test_choose_route_can_select_deep_when_enabled_and_judge_unavailable(
     )
     decision: RouteDecision = await service.choose_route(cfg, req)
     assert decision.selected_alias == "deep"
-    assert decision.reason == "heuristic_fallback"
+    assert decision.reason == "policy_deep_reasoning_or_websearch"
 
 
 @pytest.mark.asyncio
