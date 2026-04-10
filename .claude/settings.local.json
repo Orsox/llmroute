@@ -13,5 +13,8 @@
       "WebSearch",
       "WebFetch(domain:www.stm32cubecli.com)"
     ]
+  },
+  "env": {
+    "ROUTER_DEFAULT_MODEL_ALIAS": "small"
   }
 }

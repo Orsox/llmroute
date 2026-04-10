@@ -39,6 +39,8 @@ from .shared import (
     DEFAULT_TOOLUSE_SYSTEM_HINT,
     _payload_summary,
     _request_id_ctx,
+    _sanitize_session_id,
+    _session_id_ctx,
     _request_start_ctx,
     _thinking_debug_enabled,
     _thinking_payload_probe,
@@ -102,30 +104,37 @@ def create_app(
     @app_instance.middleware('http')
     async def request_logging_middleware(request: Request, call_next):
         incoming_request_id = request.headers.get('x-request-id', '').strip()
+        incoming_session_id = _sanitize_session_id(request.headers.get('x-router-session-id', ''))
         request_id = incoming_request_id or uuid.uuid4().hex[:12]
         req_token = _request_id_ctx.set(request_id)
+        sess_token = _session_id_ctx.set(incoming_session_id or "-")
         start_token = _request_start_ctx.set(time.perf_counter())
         start = time.perf_counter()
         request.state.request_id = request_id
+        request.state.session_id = incoming_session_id
 
         client_host = request.client.host if request.client else '-'
         logger.info(
-            'request_start method=%s path=%s client=%s query=%s',
+            'request_start method=%s path=%s client=%s query=%s session_id=%s',
             request.method,
             request.url.path,
             client_host,
             request.url.query,
+            incoming_session_id or "-",
         )
         try:
             response = await call_next(request)
             duration_ms = int((time.perf_counter() - start) * 1000)
             response.headers['x-request-id'] = request_id
+            if incoming_session_id:
+                response.headers['x-router-session-id'] = incoming_session_id
             logger.info(
-                'request_end method=%s path=%s status=%s duration_ms=%s',
+                'request_end method=%s path=%s status=%s duration_ms=%s session_id=%s',
                 request.method,
                 request.url.path,
                 response.status_code,
                 duration_ms,
+                incoming_session_id or "-",
             )
             return response
         except Exception:
@@ -139,6 +148,7 @@ def create_app(
             raise
         finally:
             _request_start_ctx.reset(start_token)
+            _session_id_ctx.reset(sess_token)
             _request_id_ctx.reset(req_token)
 
     async def require_auth(request: Request) -> None:
@@ -178,7 +188,10 @@ def create_app(
         logger.info('request_payload source=openai_chat %s', _payload_summary(payload))
         if _thinking_debug_enabled():
             logger.info('thinking_debug_request source=openai_chat probe=%s', _thinking_payload_probe(payload))
-        decision, alias, used_fallback, result = await service.handle_openai_chat(payload)
+        decision, alias, used_fallback, result = await service.handle_openai_chat(
+            payload,
+            session_id=getattr(request.state, "session_id", ""),
+        )
         cfg = store.get_config()
         headers = _route_headers(cfg, decision, alias, used_fallback)
         _log_route_analytics(cfg, decision, alias, used_fallback)
@@ -191,7 +204,10 @@ def create_app(
         await require_auth(request)
         payload = await request.json()
         logger.info('request_payload source=openai_completions %s', _payload_summary(payload))
-        decision, alias, used_fallback, result = await service.handle_openai_completions(payload)
+        decision, alias, used_fallback, result = await service.handle_openai_completions(
+            payload,
+            session_id=getattr(request.state, "session_id", ""),
+        )
         cfg = store.get_config()
         headers = _route_headers(cfg, decision, alias, used_fallback)
         _log_route_analytics(cfg, decision, alias, used_fallback)
@@ -206,7 +222,10 @@ def create_app(
         logger.info('request_payload source=anthropic_messages %s', _payload_summary(payload))
         if _thinking_debug_enabled():
             logger.info('thinking_debug_request source=anthropic_messages probe=%s', _thinking_payload_probe(payload))
-        decision, alias, used_fallback, is_stream, result = await service.handle_anthropic_messages(payload)
+        decision, alias, used_fallback, is_stream, result = await service.handle_anthropic_messages(
+            payload,
+            session_id=getattr(request.state, "session_id", ""),
+        )
         cfg = store.get_config()
         headers = _route_headers(cfg, decision, alias, used_fallback)
         _log_route_analytics(cfg, decision, alias, used_fallback)

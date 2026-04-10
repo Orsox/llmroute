@@ -41,6 +41,20 @@ class HeuristicSettings(BaseModel):
     suspect_default_max_tokens_threshold: int = 8192
 
 
+class RepetitionEscalationSettings(BaseModel):
+    enabled: bool = True
+    history_limit: int = 6
+    min_streak: int = 1
+    similarity_threshold: float = Field(default=0.92, ge=0.0, le=1.0)
+
+
+class SessionMemorySettings(BaseModel):
+    enabled: bool = True
+    require_session_id: bool = True
+    max_sessions: int = 128
+    max_entries_per_session: int = 32
+
+
 class RoutingSettings(BaseModel):
     judge_timeout_seconds: float = 15.0
     fallback_enabled: bool = True
@@ -49,6 +63,8 @@ class RoutingSettings(BaseModel):
     analytics_enabled: bool = True
     analytics_sqlite_path: str = "logs/router_analytics.sqlite"
     heuristics: HeuristicSettings = Field(default_factory=HeuristicSettings)
+    session_memory: SessionMemorySettings = Field(default_factory=SessionMemorySettings)
+    repetition_escalation: RepetitionEscalationSettings = Field(default_factory=RepetitionEscalationSettings)
 
 
 class RouterIdentitySettings(BaseModel):
@@ -205,6 +221,18 @@ def _default_config() -> dict[str, Any]:
                 "judge_prompt_context_chars": 6000,
                 "lightweight_max_tokens_cap": 768,
                 "suspect_default_max_tokens_threshold": 8192,
+            },
+            "session_memory": {
+                "enabled": True,
+                "require_session_id": True,
+                "max_sessions": 128,
+                "max_entries_per_session": 32,
+            },
+            "repetition_escalation": {
+                "enabled": True,
+                "history_limit": 6,
+                "min_streak": 1,
+                "similarity_threshold": 0.92,
             },
         },
         "router_identity": {

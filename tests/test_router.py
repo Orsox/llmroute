@@ -27,6 +27,8 @@ def _write_config(
     token: str | None = None,
     small_context: int = 32996,
     default_temperature: float | None = None,
+    repetition_similarity_threshold: float = 0.92,
+    require_session_id: bool = True,
 ) -> None:
     data = {
         "server": {
@@ -71,6 +73,18 @@ def _write_config(
                 "judge_prompt_context_chars": 1200,
                 "lightweight_max_tokens_cap": 384,
                 "suspect_default_max_tokens_threshold": 2048,
+            },
+            "session_memory": {
+                "enabled": True,
+                "require_session_id": require_session_id,
+                "max_sessions": 64,
+                "max_entries_per_session": 16,
+            },
+            "repetition_escalation": {
+                "enabled": True,
+                "history_limit": 6,
+                "min_streak": 1,
+                "similarity_threshold": repetition_similarity_threshold,
             },
         },
         "router_identity": {
@@ -526,6 +540,53 @@ async def test_judge_prompt_uses_sanitized_latest_user_text(cfg_file: Path) -> N
 
 
 @pytest.mark.asyncio
+async def test_judge_prompt_includes_recent_request_memory(cfg_file: Path) -> None:
+    lm = FakeLMClient()
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=lm)
+    cfg = service.config_store.get_config()
+
+    first_req = UnifiedRequest(
+        source_api="openai_chat",
+        session_id="sess-a",
+        requested_model="borg-cpu",
+        stream=False,
+        max_tokens=120,
+        prompt_text="Bitte erklaere Quantencomputing kurz in einfachen Worten.",
+        user_prompt_text="Bitte erklaere Quantencomputing kurz in einfachen Worten.",
+        latest_user_prompt_text="Bitte erklaere Quantencomputing kurz in einfachen Worten.",
+        estimated_input_tokens=20,
+        needs_vision=False,
+        needs_tooluse=False,
+        required_base_capability="chat",
+    )
+    second_req = UnifiedRequest(
+        source_api="openai_chat",
+        session_id="sess-a",
+        requested_model="borg-cpu",
+        stream=False,
+        max_tokens=120,
+        prompt_text="Bitte erklaere Quantencomputing bitte kurz in sehr einfachen Worten.",
+        user_prompt_text="Bitte erklaere Quantencomputing bitte kurz in sehr einfachen Worten.",
+        latest_user_prompt_text="Bitte erklaere Quantencomputing bitte kurz in sehr einfachen Worten.",
+        estimated_input_tokens=24,
+        needs_vision=False,
+        needs_tooluse=False,
+        required_base_capability="chat",
+    )
+
+    _ = await service.choose_route(cfg, first_req)
+    _ = await service.choose_route(cfg, second_req)
+
+    assert lm.last_judge_payload is not None
+    judge_body = json.loads(lm.last_judge_payload["messages"][1]["content"])
+    memory = judge_body["features"]["recent_request_memory"]
+    assert memory["previous_request"] is not None
+    assert memory["previous_request"]["selected_alias"] == "small"
+    assert memory["previous_request_similarity"] > 0.8
+    assert "Quantencomputing" in memory["previous_request"]["prompt_excerpt"]
+
+
+@pytest.mark.asyncio
 async def test_choose_route_keeps_large_for_real_tool_loop_context(cfg_file: Path) -> None:
     service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=FakeLMClient())
     cfg = service.config_store.get_config()
@@ -703,6 +764,111 @@ def test_non_coding_request_does_not_fallback_to_large_when_small_fails(cfg_file
     }
     resp = client.post("/v1/chat/completions", json=payload)
     assert resp.status_code == 502
+
+
+def test_repeated_similar_requests_escalate_from_small_to_large(cfg_file: Path) -> None:
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+    headers = {"x-router-session-id": "sess-a"}
+    payload = {
+        "model": "borg-cpu",
+        "messages": [{"role": "user", "content": "Bitte erklaere Quantencomputing kurz in einfachen Worten."}],
+        "max_tokens": 120,
+    }
+
+    first = client.post("/v1/chat/completions", json=payload, headers=headers)
+    assert first.status_code == 200
+    assert first.headers["x-router-selected-model"] == "qwen/qwen3-vl-8b"
+    assert first.headers["x-router-session-id"] == "sess-a"
+
+    second = client.post("/v1/chat/completions", json=payload, headers=headers)
+    assert second.status_code == 200
+    assert second.headers["x-router-selected-model"] == "qwen/qwen3.5-35b-a3b"
+    assert second.headers["x-router-reason"] == "repetition_escalation_small_to_large"
+
+
+def test_repeated_requests_can_escalate_from_large_to_deep(cfg_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DEEP_ENABLED", "true")
+    _write_config(cfg_file, repetition_similarity_threshold=0.84)
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+    headers = {"x-router-session-id": "sess-a"}
+
+    first = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "borg-cpu",
+            "messages": [{"role": "user", "content": "Bitte erklaere Quantencomputing kurz in einfachen Worten."}],
+            "max_tokens": 120,
+        },
+        headers=headers,
+    )
+    assert first.status_code == 200
+    assert first.headers["x-router-selected-model"] == "qwen/qwen3-vl-8b"
+
+    second = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "borg-cpu",
+            "messages": [{"role": "user", "content": "Bitte erklaere Quantencomputing bitte kurz in sehr einfachen Worten."}],
+            "max_tokens": 120,
+        },
+        headers=headers,
+    )
+    assert second.status_code == 200
+    assert second.headers["x-router-selected-model"] == "qwen/qwen3.5-35b-a3b"
+    assert second.headers["x-router-reason"] == "repetition_escalation_small_to_large"
+
+    third = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "borg-cpu",
+            "messages": [{"role": "user", "content": "Bitte erklaere Quantencomputing bitte kurz in sehr einfachen Worten."}],
+            "max_tokens": 120,
+        },
+        headers=headers,
+    )
+    assert third.status_code == 200
+    assert third.headers["x-router-selected-model"] == "gpt-4.1"
+    assert third.headers["x-router-reason"] == "repetition_escalation_large_to_deep"
+
+
+def test_similar_requests_in_different_sessions_do_not_mix(cfg_file: Path) -> None:
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+    payload = {
+        "model": "borg-cpu",
+        "messages": [{"role": "user", "content": "Bitte erklaere Quantencomputing kurz in einfachen Worten."}],
+        "max_tokens": 120,
+    }
+
+    first = client.post("/v1/chat/completions", json=payload, headers={"x-router-session-id": "sess-a"})
+    assert first.status_code == 200
+    assert first.headers["x-router-selected-model"] == "qwen/qwen3-vl-8b"
+
+    second = client.post("/v1/chat/completions", json=payload, headers={"x-router-session-id": "sess-b"})
+    assert second.status_code == 200
+    assert second.headers["x-router-selected-model"] == "qwen/qwen3-vl-8b"
+    assert second.headers["x-router-reason"] == "judge_small"
+
+
+def test_missing_session_id_disables_memory_when_required(cfg_file: Path) -> None:
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+    payload = {
+        "model": "borg-cpu",
+        "messages": [{"role": "user", "content": "Bitte erklaere Quantencomputing kurz in einfachen Worten."}],
+        "max_tokens": 120,
+    }
+
+    first = client.post("/v1/chat/completions", json=payload)
+    second = client.post("/v1/chat/completions", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.headers.get("x-router-session-id", "") == ""
+    assert second.headers["x-router-selected-model"] == "qwen/qwen3-vl-8b"
+    assert second.headers["x-router-reason"] == "judge_small"
 
 
 def test_anthropic_endpoint_returns_mvp_shape(cfg_file: Path) -> None:

@@ -37,6 +37,7 @@ from pathlib import Path
 
 _request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 _request_start_ctx: contextvars.ContextVar[float] = contextvars.ContextVar("request_start", default=0.0)
+_session_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar("session_id", default="-")
 
 # Optionaler Import des Konfigurationsfensters
 # config_gui.py removed - HTML is now default UI
@@ -45,6 +46,7 @@ _request_start_ctx: contextvars.ContextVar[float] = contextvars.ContextVar("requ
 class _RequestIdFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = _request_id_ctx.get()
+        record.session_id = _session_id_ctx.get()
         return True
 
 
@@ -62,7 +64,7 @@ def _configure_logging() -> logging.Logger:
     backup_count = int(os.getenv("ROUTER_LOG_BACKUP_COUNT", "3"))
     log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s [req=%(request_id)s] %(message)s")
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s [req=%(request_id)s sess=%(session_id)s] %(message)s")
     req_filter = _RequestIdFilter()
 
     stream_handler = logging.StreamHandler()
@@ -170,6 +172,7 @@ ROUTING_NOISE_LINE_RE = re.compile(
     r")$",
     re.IGNORECASE,
 )
+SESSION_ID_RE = re.compile(r"[^a-zA-Z0-9._:-]+")
 LIGHTWEIGHT_TASK_RE = re.compile(
     r"^(?:"
     r"hi|hello|hey|hallo|moin|servus|yo|ok|okay|thanks|danke|thx|"
@@ -235,11 +238,10 @@ def _payload_summary(payload: dict[str, Any]) -> str:
     )
 
 
-DEFAULT_TOOLUSE_SYSTEM_HINT = (
-    "When tools are available, never return an empty assistant response. "
-    "If you need external data or an action, call the appropriate tool. "
-    "If no tool is needed, return a concise direct answer."
-)
+DEFAULT_TOOLUSE_SYSTEM_HINT = ""
+TOOLUSE_SYSTEM_HINT_PATH = PROJECT_ROOT / "config" / "tooluse_system_hint.yaml"
+COMMIT_MESSAGE_HINT_PATH = PROJECT_ROOT / "config" / "commit_message_hint.yaml"
+JUDGE_PROMPT_SYSTEM_PATH = PROJECT_ROOT / "config" / "judge_prompt_system.yaml"
 THINKING_DEBUG_ENV = "ROUTER_DEBUG_THINKING"
 
 
@@ -369,6 +371,15 @@ def _sanitize_routing_text(text: str) -> tuple[str, bool]:
 def _hash_text(text: str) -> str:
     normalized = (text or "").strip()
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _sanitize_session_id(value: Optional[str]) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    cleaned = SESSION_ID_RE.sub("-", raw).strip(".:-_")
+    cleaned = re.sub(r"-{2,}", "-", cleaned)
+    return cleaned[:128]
 
 
 def _estimate_tokens_from_text(text: str) -> int:

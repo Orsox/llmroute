@@ -35,6 +35,16 @@ routing:
     judge_prompt_context_chars: 6000
     lightweight_max_tokens_cap: 768
     suspect_default_max_tokens_threshold: 8192
+  session_memory:
+    enabled: true
+    require_session_id: true
+    max_sessions: 128
+    max_entries_per_session: 32
+  repetition_escalation:
+    enabled: true
+    history_limit: 6
+    min_streak: 1
+    similarity_threshold: 0.92
 router_identity:
   exposed_model_name: borg-cpu
   publish_underlying_models: true

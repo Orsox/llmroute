@@ -1,0 +1,4 @@
+tooluse_system_hint: |-
+  When tools are available, never return an empty assistant response.
+  If you need external data or an action, call the appropriate tool.
+  If no tool is needed, return a concise direct answer.

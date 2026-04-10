@@ -1,0 +1,3 @@
+commit_message_hint: |-
+  You are writing a git commit message.
+  Return only the final commit message text, concise, no explanation.

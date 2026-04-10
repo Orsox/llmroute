@@ -125,6 +125,8 @@ Important knobs:
 - `server.port` (default `12345`)
 - `routing.default_temperature` to apply a default request temperature when clients do not send one
 - `routing.heuristics.*` for judge tuning
+- `routing.session_memory.*` to scope request history by `x-router-session-id`
+- `routing.repetition_escalation.*` to automatically step up from `small -> large -> deep` on repeated similar prompts using in-memory request history
 - `router_identity.exposed_model_name` (default `borg-cpu`)
 - `models.<alias>.upstream_ref` for per-model upstream mapping
 - `models.<alias>.supports_thinking` to mark if a model can run with thinking enabled
@@ -133,6 +135,12 @@ Deep defaults used in this project:
 
 - model: `gpt-5.4-mini`
 - context: `400000`
+
+Session-aware routing:
+
+- send `x-router-session-id: <stable-session-id-per-client-instance>`
+- request history and loop detection are isolated per session id
+- when `routing.session_memory.require_session_id=true`, requests without a session id do not participate in memory-based loop detection
 
 ---
 

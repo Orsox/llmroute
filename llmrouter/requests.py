@@ -10,6 +10,7 @@ from .shared import (
 
 class UnifiedRequest(BaseModel):
     source_api: str
+    session_id: str = ""
     requested_model: Optional[str] = None
     stream: bool = False
     max_tokens: Optional[int] = None
@@ -78,7 +79,7 @@ class UnifiedRequest(BaseModel):
         return self.routing_input_tokens + self.effective_routing_max_tokens_budget
 
 
-def normalize_openai_chat(payload: dict[str, Any]) -> UnifiedRequest:
+def normalize_openai_chat(payload: dict[str, Any], *, session_id: str = "") -> UnifiedRequest:
     messages = payload.get("messages") or []
     prompt_chunks: list[str] = []
     user_chunks: list[str] = []
@@ -100,6 +101,7 @@ def normalize_openai_chat(payload: dict[str, Any]) -> UnifiedRequest:
     max_tokens = payload.get("max_tokens") or payload.get("max_completion_tokens")
     return UnifiedRequest(
         source_api="openai_chat",
+        session_id=session_id,
         requested_model=payload.get("model"),
         stream=bool(payload.get("stream")),
         max_tokens=max_tokens,
@@ -118,7 +120,7 @@ def normalize_openai_chat(payload: dict[str, Any]) -> UnifiedRequest:
     )
 
 
-def normalize_openai_completion(payload: dict[str, Any]) -> UnifiedRequest:
+def normalize_openai_completion(payload: dict[str, Any], *, session_id: str = "") -> UnifiedRequest:
     prompt = payload.get("prompt", "")
     if isinstance(prompt, list):
         prompt_text = "\n".join(str(x) for x in prompt)
@@ -126,6 +128,7 @@ def normalize_openai_completion(payload: dict[str, Any]) -> UnifiedRequest:
         prompt_text = str(prompt)
     return UnifiedRequest(
         source_api="openai_completions",
+        session_id=session_id,
         requested_model=payload.get("model"),
         stream=bool(payload.get("stream")),
         max_tokens=payload.get("max_tokens"),
@@ -144,7 +147,7 @@ def normalize_openai_completion(payload: dict[str, Any]) -> UnifiedRequest:
     )
 
 
-def normalize_anthropic_messages(payload: dict[str, Any]) -> UnifiedRequest:
+def normalize_anthropic_messages(payload: dict[str, Any], *, session_id: str = "") -> UnifiedRequest:
     messages = payload.get("messages") or []
     system = payload.get("system")
     prompt_chunks: list[str] = []
@@ -203,6 +206,7 @@ def normalize_anthropic_messages(payload: dict[str, Any]) -> UnifiedRequest:
     routing_input_tokens = _estimate_tokens_from_text(routing_prompt_text)
     return UnifiedRequest(
         source_api="anthropic_messages",
+        session_id=session_id,
         requested_model=payload.get("model"),
         stream=bool(payload.get("stream")),
         max_tokens=payload.get("max_tokens"),
@@ -227,6 +231,7 @@ class RouteDecision:
     reason: str
     candidate_aliases: list[str]
     request_id: str = "-"
+    session_id: str = ""
     thinking_requested: bool = False
     is_commit_message_task: bool = False
     judge_model_id: Optional[str] = None

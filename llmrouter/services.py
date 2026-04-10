@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections import OrderedDict, deque
+from difflib import SequenceMatcher
+
 from .shared import *
 from .shared import (
     _current_request_latency_ms,
@@ -505,6 +508,7 @@ class AnalyticsStore:
             """
             CREATE TABLE IF NOT EXISTS routing_runs (
                 request_id TEXT PRIMARY KEY,
+                session_id TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 route_logged_at TEXT,
@@ -555,6 +559,9 @@ class AnalyticsStore:
             )
             """
         )
+        existing_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(routing_runs)").fetchall()}
+        if "session_id" not in existing_columns:
+            conn.execute("ALTER TABLE routing_runs ADD COLUMN session_id TEXT")
         conn.commit()
 
     def _connect(self) -> sqlite3.Connection:
@@ -579,7 +586,7 @@ class AnalyticsStore:
                 conn.execute(
                     """
                     INSERT INTO routing_runs (
-                        request_id, created_at, updated_at, route_logged_at, source, requested_model,
+                        request_id, session_id, created_at, updated_at, route_logged_at, source, requested_model,
                         initial_alias, selected_alias, selected_model, reason, effective_reason,
                         fallback_used, stream, candidate_aliases_json, required_capabilities_json,
                         context_signature, complexity, full_input_tokens, full_estimated_total_tokens,
@@ -591,7 +598,7 @@ class AnalyticsStore:
                         thinking_applied, expected_route_class, routing_efficiency_label,
                         routing_efficiency_score, latency_ms
                     ) VALUES (
-                        :request_id, :created_at, :updated_at, :route_logged_at, :source, :requested_model,
+                        :request_id, :session_id, :created_at, :updated_at, :route_logged_at, :source, :requested_model,
                         :initial_alias, :selected_alias, :selected_model, :reason, :effective_reason,
                         :fallback_used, :stream, :candidate_aliases_json, :required_capabilities_json,
                         :context_signature, :complexity, :full_input_tokens, :full_estimated_total_tokens,
@@ -606,6 +613,7 @@ class AnalyticsStore:
                     ON CONFLICT(request_id) DO UPDATE SET
                         updated_at=excluded.updated_at,
                         route_logged_at=excluded.route_logged_at,
+                        session_id=excluded.session_id,
                         source=excluded.source,
                         requested_model=excluded.requested_model,
                         initial_alias=excluded.initial_alias,
@@ -646,6 +654,7 @@ class AnalyticsStore:
                     """,
                     {
                         "request_id": request_id,
+                        "session_id": payload.get("session_id"),
                         "created_at": now,
                         "updated_at": now,
                         "route_logged_at": now,
@@ -705,13 +714,13 @@ class AnalyticsStore:
                 conn.execute(
                     """
                     INSERT INTO routing_runs (
-                        request_id, created_at, updated_at, output_logged_at, source,
+                        request_id, session_id, created_at, updated_at, output_logged_at, source,
                         selected_alias, selected_model, reason, fallback_used, stream,
                         output_text_chars, output_text_excerpt, output_tokens, input_tokens,
                         tool_calls, stop_reason, routing_efficiency_label,
                         routing_efficiency_score, latency_ms
                     ) VALUES (
-                        :request_id, :created_at, :updated_at, :output_logged_at, :source,
+                        :request_id, :session_id, :created_at, :updated_at, :output_logged_at, :source,
                         :selected_alias, :selected_model, :reason, :fallback_used, :stream,
                         :output_text_chars, :output_text_excerpt, :output_tokens, :input_tokens,
                         :tool_calls, :stop_reason, :routing_efficiency_label,
@@ -720,6 +729,7 @@ class AnalyticsStore:
                     ON CONFLICT(request_id) DO UPDATE SET
                         updated_at=excluded.updated_at,
                         output_logged_at=excluded.output_logged_at,
+                        session_id=COALESCE(excluded.session_id, routing_runs.session_id),
                         source=COALESCE(excluded.source, routing_runs.source),
                         selected_alias=COALESCE(excluded.selected_alias, routing_runs.selected_alias),
                         selected_model=COALESCE(excluded.selected_model, routing_runs.selected_model),
@@ -738,6 +748,7 @@ class AnalyticsStore:
                     """,
                     {
                         "request_id": request_id,
+                        "session_id": payload.get("session_id"),
                         "created_at": now,
                         "updated_at": now,
                         "output_logged_at": now,
@@ -762,11 +773,77 @@ class AnalyticsStore:
             finally:
                 conn.close()
 
+    def recent_routes(self, *, source: str, limit: int) -> list[dict[str, Any]]:
+        if not self._enabled():
+            return []
+        safe_limit = max(1, int(limit))
+        with self._lock:
+            conn = self._connect()
+            try:
+                cursor = conn.execute(
+                    """
+                    SELECT request_id, source, selected_alias, reason, repetition_key,
+                           routing_latest_user_text, needs_vision, needs_tooluse, is_coding
+                    FROM routing_runs
+                    WHERE route_logged_at IS NOT NULL
+                      AND source = ?
+                    ORDER BY COALESCE(route_logged_at, created_at) DESC, rowid DESC
+                    LIMIT ?
+                    """,
+                    (source, safe_limit),
+                )
+                columns = [col[0] for col in cursor.description or []]
+                return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            except sqlite3.Error as exc:
+                logger.warning("analytics_recent_routes_failed source=%s limit=%s error=%s", source, safe_limit, exc)
+                return []
+            finally:
+                conn.close()
+
+
+class RequestMemoryStore:
+    def __init__(self, max_sessions: int = 128, max_entries_per_session: int = 32):
+        self._max_sessions = max(8, int(max_sessions))
+        self._max_entries_per_session = max(4, int(max_entries_per_session))
+        self._entries_by_session: OrderedDict[str, deque[dict[str, Any]]] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def remember(self, session_id: str, entry: dict[str, Any]) -> None:
+        if not session_id:
+            return
+        with self._lock:
+            bucket = self._entries_by_session.get(session_id)
+            if bucket is None:
+                if len(self._entries_by_session) >= self._max_sessions:
+                    self._entries_by_session.popitem(last=False)
+                bucket = deque(maxlen=self._max_entries_per_session)
+                self._entries_by_session[session_id] = bucket
+            else:
+                self._entries_by_session.move_to_end(session_id)
+            bucket.appendleft(dict(entry))
+
+    def recent_entries(self, session_id: str, limit: int) -> list[dict[str, Any]]:
+        if not session_id:
+            return []
+        safe_limit = max(1, int(limit))
+        with self._lock:
+            bucket = self._entries_by_session.get(session_id)
+            if bucket is None:
+                return []
+            self._entries_by_session.move_to_end(session_id)
+            return [dict(item) for item in list(bucket)[:safe_limit]]
+
 
 class RouterService:
     def __init__(self, config_store: ConfigStore, lm_client: Optional[LMStudioClient] = None):
         self.config_store = config_store
         self.lm_client = lm_client or LMStudioClient()
+        self.analytics_store = AnalyticsStore(config_store)
+        cfg = config_store.get_config()
+        self.request_memory = RequestMemoryStore(
+            max_sessions=cfg.routing.session_memory.max_sessions,
+            max_entries_per_session=cfg.routing.session_memory.max_entries_per_session,
+        )
 
     @staticmethod
     def _is_deep_reasoning_request(req: UnifiedRequest) -> bool:
@@ -905,6 +982,249 @@ class RouterService:
     def _small_coding_task_limit_tokens() -> int:
         return max(1024, int(os.getenv("ROUTER_SMALL_CODING_TASK_MAX_TOTAL_TOKENS", "8000")))
 
+    @staticmethod
+    def _normalized_repetition_text(req: UnifiedRequest) -> str:
+        base = (
+            req.routing_latest_user_prompt_text
+            or req.routing_user_prompt_text
+            or req.routing_prompt_text
+            or req.latest_user_prompt_text
+            or req.user_prompt_text
+            or req.prompt_text
+            or ""
+        ).strip().lower()
+        return re.sub(r"\s+", " ", base)[:2000]
+
+    @staticmethod
+    def _route_tier_index(alias: str) -> int:
+        route_tiers = {"small": 0, "large": 1, "deep": 2}
+        return route_tiers.get(alias, -1)
+
+    @staticmethod
+    def _effective_session_id(cfg: RouterConfig, req: UnifiedRequest) -> str:
+        session_cfg = cfg.routing.session_memory
+        if not session_cfg.enabled:
+            return ""
+        session_id = (req.session_id or "").strip()
+        if session_id:
+            return session_id
+        if session_cfg.require_session_id:
+            return ""
+        return "default"
+
+    @classmethod
+    def _similarity_score(
+        cls,
+        current_text: str,
+        past_text: str,
+        *,
+        current_key: str,
+        past_key: str,
+    ) -> float:
+        if current_key and past_key and current_key == past_key:
+            return 1.0
+        if not current_text or not past_text:
+            return 0.0
+        return SequenceMatcher(None, current_text, past_text).ratio()
+
+    def _recent_request_memory_for_judge(
+        self,
+        cfg: RouterConfig,
+        req: UnifiedRequest,
+        is_coding: bool,
+    ) -> dict[str, Any]:
+        settings = cfg.routing.repetition_escalation
+        current_text = self._normalized_repetition_text(req)
+        session_id = self._effective_session_id(cfg, req)
+        recent_entries = self.request_memory.recent_entries(session_id, limit=min(settings.history_limit, 3))
+        summarized_entries: list[dict[str, Any]] = []
+
+        for entry in recent_entries:
+            similarity = self._similarity_score(
+                current_text,
+                str(entry.get("normalized_text") or ""),
+                current_key=self._repetition_key(req),
+                past_key=str(entry.get("repetition_key") or ""),
+            )
+            summarized_entries.append(
+                {
+                    "request_id": entry.get("request_id"),
+                    "source_api": entry.get("source_api"),
+                    "selected_alias": entry.get("selected_alias"),
+                    "reason": entry.get("reason"),
+                    "is_coding": bool(entry.get("is_coding")),
+                    "needs_tooluse": bool(entry.get("needs_tooluse")),
+                    "needs_vision": bool(entry.get("needs_vision")),
+                    "similarity_to_current": round(similarity, 3),
+                    "prompt_excerpt": str(entry.get("prompt_excerpt") or "")[:240],
+                }
+            )
+
+        previous_request = summarized_entries[0] if summarized_entries else None
+        previous_is_compatible = bool(
+            previous_request
+            and previous_request["is_coding"] == is_coding
+            and previous_request["needs_tooluse"] == req.needs_tooluse
+            and previous_request["needs_vision"] == req.needs_vision
+        )
+        previous_similarity = float(previous_request["similarity_to_current"]) if previous_request else 0.0
+
+        return {
+            "previous_request": previous_request,
+            "recent_requests": summarized_entries,
+            "previous_request_similarity": round(previous_similarity, 3),
+            "previous_request_compatible": previous_is_compatible,
+            "loop_risk": bool(
+                previous_request
+                and previous_is_compatible
+                and previous_similarity >= settings.similarity_threshold
+            ),
+            "similarity_threshold": settings.similarity_threshold,
+            "session_id": session_id or None,
+        }
+
+    def _find_repetition_escalation_alias(
+        self,
+        cfg: RouterConfig,
+        req: UnifiedRequest,
+        candidates: list[str],
+        selected_alias: str,
+        is_coding: bool,
+    ) -> tuple[Optional[str], Optional[str], int, float]:
+        settings = cfg.routing.repetition_escalation
+        if not settings.enabled or len(candidates) <= 1:
+            return None, None, 0, 0.0
+
+        current_text = self._normalized_repetition_text(req)
+        if not current_text:
+            return None, None, 0, 0.0
+
+        session_id = self._effective_session_id(cfg, req)
+        if not session_id:
+            return None, None, 0, 0.0
+
+        current_key = self._repetition_key(req)
+        recent_rows = self.request_memory.recent_entries(session_id, limit=settings.history_limit)
+        if not recent_rows:
+            return None, None, 0, 0.0
+
+        streak = 0
+        best_similarity = 0.0
+        most_recent_similar_alias: Optional[str] = None
+        for row in recent_rows:
+            if str(row.get("source_api") or "") != req.source_api:
+                break
+            if bool(row.get("needs_vision")) != req.needs_vision:
+                break
+            if bool(row.get("needs_tooluse")) != req.needs_tooluse:
+                break
+            if bool(row.get("is_coding")) != is_coding:
+                break
+
+            past_text = str(row.get("normalized_text") or "")
+            similarity = self._similarity_score(
+                current_text,
+                past_text,
+                current_key=current_key,
+                past_key=str(row.get("repetition_key") or ""),
+            )
+            if similarity < settings.similarity_threshold:
+                break
+
+            streak += 1
+            best_similarity = max(best_similarity, similarity)
+            if most_recent_similar_alias is None:
+                most_recent_similar_alias = str(row.get("selected_alias") or "").strip()
+
+        if streak < settings.min_streak or not most_recent_similar_alias:
+            return None, None, streak, best_similarity
+
+        start_tier = max(
+            self._route_tier_index(selected_alias),
+            self._route_tier_index(most_recent_similar_alias),
+        )
+        if start_tier < 0:
+            return None, None, streak, best_similarity
+
+        escalation_source = selected_alias
+        if self._route_tier_index(most_recent_similar_alias) > self._route_tier_index(selected_alias):
+            escalation_source = most_recent_similar_alias
+
+        for alias in ("small", "large", "deep"):
+            tier = self._route_tier_index(alias)
+            if tier <= start_tier:
+                continue
+            if alias in candidates:
+                return alias, escalation_source, streak, best_similarity
+        return None, None, streak, best_similarity
+
+    def _build_decision(
+        self,
+        cfg: RouterConfig,
+        req: UnifiedRequest,
+        *,
+        selected_alias: str,
+        reason: str,
+        candidates: list[str],
+        thinking_requested: bool,
+        judge_model_id: Optional[str],
+        is_coding: bool,
+    ) -> RouteDecision:
+        escalated_alias, escalation_source, repetition_streak, similarity = self._find_repetition_escalation_alias(
+            cfg,
+            req,
+            candidates,
+            selected_alias,
+            is_coding,
+        )
+        if escalated_alias and escalated_alias != selected_alias:
+            decision_source = escalation_source or selected_alias
+            logger.info(
+                "route_eval_repetition_escalation from=%s to=%s streak=%s similarity=%.3f original_reason=%s",
+                selected_alias,
+                escalated_alias,
+                repetition_streak,
+                similarity,
+                reason,
+            )
+            selected_alias = escalated_alias
+            reason = f"repetition_escalation_{decision_source}_to_{selected_alias}"
+            thinking_requested = self._heuristic_thinking_requested(cfg, req, selected_alias)
+
+        if req.needs_tooluse or self._is_no_thinking_task(req):
+            thinking_requested = False
+        if thinking_requested and not cfg.models[selected_alias].supports_thinking:
+            thinking_requested = False
+
+        decision = self._make_route_decision(
+            req=req,
+            selected_alias=selected_alias,
+            reason=reason,
+            candidates=candidates,
+            thinking_requested=thinking_requested,
+            judge_model_id=judge_model_id,
+            is_coding=is_coding,
+        )
+        session_id = self._effective_session_id(cfg, req)
+        if session_id:
+            self.request_memory.remember(
+                session_id,
+                {
+                    "request_id": decision.request_id,
+                    "session_id": session_id,
+                    "source_api": decision.source_api,
+                    "selected_alias": decision.selected_alias,
+                    "reason": decision.reason,
+                    "repetition_key": decision.repetition_key,
+                    "normalized_text": self._normalized_repetition_text(req),
+                    "prompt_excerpt": decision.routing_latest_user_prompt_text,
+                    "is_coding": decision.is_coding_request,
+                    "needs_tooluse": decision.needs_tooluse,
+                    "needs_vision": decision.needs_vision,
+                }
+            )
+        return decision
+
     def _make_route_decision(
         self,
         req: UnifiedRequest,
@@ -928,6 +1248,7 @@ class RouterService:
             reason=reason,
             candidate_aliases=candidates,
             request_id=_request_id_ctx.get(),
+            session_id=req.session_id,
             thinking_requested=thinking_requested,
             is_commit_message_task=self._is_commit_message_task(req),
             judge_model_id=judge_model_id,
@@ -1138,10 +1459,13 @@ class RouterService:
         else:
             normalized["max_completion_tokens"] = token_cap
 
-        hint = (
-            "You are writing a git commit message. "
-            "Return only the final commit message text, concise, no explanation."
-        )
+        hint = ""
+        if COMMIT_MESSAGE_HINT_PATH.exists():
+            loaded_hint = yaml.safe_load(COMMIT_MESSAGE_HINT_PATH.read_text(encoding="utf-8"))
+            if isinstance(loaded_hint, dict):
+                hint = str(loaded_hint.get("commit_message_hint", "")).strip()
+            elif loaded_hint is not None:
+                hint = str(loaded_hint).strip()
         messages = normalized.get("messages")
         if isinstance(messages, list):
             if messages and isinstance(messages[0], dict) and messages[0].get("role") == "system":
@@ -1290,6 +1614,7 @@ class RouterService:
         )
         latest_user_excerpt = latest_user_text[:context_chars]
         recent_user_context = (req.routing_user_prompt_text or req.routing_prompt_text or latest_user_text)[-context_chars:]
+        recent_request_memory = self._recent_request_memory_for_judge(cfg, req, self._is_coding_request(req))
         judge_prompt = {
             "instruction": (
                 "Return only JSON: "
@@ -1309,12 +1634,14 @@ class RouterService:
                 "tool_loop_context": req.tool_loop_context,
                 "lightweight_greeting": bool(LIGHTWEIGHT_TASK_RE.match(latest_user_excerpt.strip())),
                 "requested_model": req.requested_model,
+                "session_id": self._effective_session_id(cfg, req) or None,
                 "heuristic_signals": {
                     "is_deep_reasoning": is_deep_reasoning,
                     "is_websearch": is_websearch,
                     "is_commit_task": is_commit_task,
                     "is_file_search": is_file_search,
                 },
+                "recent_request_memory": recent_request_memory,
             },
             "latest_user_prompt_excerpt": latest_user_excerpt,
             "recent_user_context_excerpt": recent_user_context,
@@ -1343,10 +1670,22 @@ class RouterService:
                 "Set thinking=off for lightweight text tasks like commit messages, PR titles/descriptions, changelogs, or summaries.",
                 "Prefer small for tool-use flows when available.",
                 "Prefer small for file search / file lookup tasks when available.",
+                "Only compare with recent requests from the same session_id; ignore all other sessions.",
+                "If no session_id is available, do not assume prior context from other clients.",
+                "If the immediately previous request in the same session is highly similar and compatible, treat it as loop risk.",
+                "When loop risk is high, prefer the next stronger candidate to break repetition.",
             ],
             "policy": "Prefer small by default. Use large for regular coding tasks. Use deep only for explicitly complex/high-stakes reasoning or web-search.",
             "preference": "Prefer small by default.",
         }
+        judge_system_prompt = ""
+        if JUDGE_PROMPT_SYSTEM_PATH.exists():
+            loaded_prompt = yaml.safe_load(JUDGE_PROMPT_SYSTEM_PATH.read_text(encoding="utf-8"))
+            if isinstance(loaded_prompt, dict):
+                judge_system_prompt = str(loaded_prompt.get("judge_prompt_system", "")).strip()
+            elif loaded_prompt is not None:
+                judge_system_prompt = str(loaded_prompt).strip()
+
         payload = {
             "model": judge_model,
             "temperature": cfg.routing.heuristics.judge_temperature,
@@ -1354,7 +1693,7 @@ class RouterService:
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are an LLM router judge. Output strict JSON only.",
+                    "content": judge_system_prompt,
                 },
                 {
                     "role": "user",
@@ -1475,8 +1814,9 @@ class RouterService:
                 req.routing_estimated_total_tokens,
             )
             selected = "backup"
-            decision = self._make_route_decision(
-                req=req,
+            decision = self._build_decision(
+                cfg,
+                req,
                 selected_alias=selected,
                 reason="no_candidates_fallback_to_backup",
                 candidates=[selected],
@@ -1496,8 +1836,9 @@ class RouterService:
 
         if len(candidates) == 1:
             selected = candidates[0]
-            decision = self._make_route_decision(
-                req=req,
+            decision = self._build_decision(
+                cfg,
+                req,
                 selected_alias=selected,
                 reason="constraint_single_candidate",
                 candidates=candidates,
@@ -1511,8 +1852,9 @@ class RouterService:
         if (is_deep or is_web) and "deep" in candidates:
             selected = "deep"
             reason = "policy_deep_reasoning_or_websearch"
-            decision = self._make_route_decision(
-                req=req,
+            decision = self._build_decision(
+                cfg,
+                req,
                 selected_alias=selected,
                 reason=reason,
                 candidates=candidates,
@@ -1554,8 +1896,9 @@ class RouterService:
             if thinking_requested and not cfg.models[selected].supports_thinking:
                 thinking_requested = False
 
-            decision = self._make_route_decision(
-                req=req,
+            decision = self._build_decision(
+                cfg,
+                req,
                 selected_alias=selected,
                 reason=reason,
                 candidates=candidates,
@@ -1570,8 +1913,9 @@ class RouterService:
             cfg, req, candidates, preferred_alias, is_coding
         )
         if preferred_when_judge_unavailable:
-            decision = self._make_route_decision(
-                req=req,
+            decision = self._build_decision(
+                cfg,
+                req,
                 selected_alias=preferred_when_judge_unavailable,
                 reason="client_model_preference_judge_unavailable",
                 candidates=candidates,
@@ -1583,8 +1927,9 @@ class RouterService:
             return decision
 
         if "small" in candidates:
-            decision = self._make_route_decision(
-                req=req,
+            decision = self._build_decision(
+                cfg,
+                req,
                 selected_alias="small",
                 reason="judge_unavailable_default_small",
                 candidates=candidates,
@@ -1596,8 +1941,9 @@ class RouterService:
             return decision
 
         heur_alias = self._heuristic_alias(cfg, req, candidates)
-        decision = self._make_route_decision(
-            req=req,
+        decision = self._build_decision(
+            cfg,
+            req,
             selected_alias=heur_alias,
             reason="heuristic_fallback",
             candidates=candidates,
@@ -1924,9 +2270,9 @@ class RouterService:
         )
         return last_alias, replay_last(), len(order) > 1 and last_alias != order[0]
 
-    async def handle_openai_chat(self, payload: dict[str, Any]) -> tuple[RouteDecision, str, bool, Any]:
+    async def handle_openai_chat(self, payload: dict[str, Any], *, session_id: str = "") -> tuple[RouteDecision, str, bool, Any]:
         cfg = self.config_store.get_config()
-        req = normalize_openai_chat(payload)
+        req = normalize_openai_chat(payload, session_id=session_id)
         decision = await self.choose_route(cfg, req)
         if req.stream:
             alias, stream_gen, used_fallback = await self._attempt_stream_with_fallback(
@@ -1965,9 +2311,9 @@ class RouterService:
         )
         return decision, alias, used_fallback, public_body
 
-    async def handle_openai_completions(self, payload: dict[str, Any]) -> tuple[RouteDecision, str, bool, Any]:
+    async def handle_openai_completions(self, payload: dict[str, Any], *, session_id: str = "") -> tuple[RouteDecision, str, bool, Any]:
         cfg = self.config_store.get_config()
-        req = normalize_openai_completion(payload)
+        req = normalize_openai_completion(payload, session_id=session_id)
         decision = await self.choose_route(cfg, req)
         if req.stream:
             alias, stream_gen, used_fallback = await self._attempt_stream_with_fallback(
@@ -2007,10 +2353,10 @@ class RouterService:
         return decision, alias, used_fallback, public_body
 
     async def handle_anthropic_messages(
-        self, payload: dict[str, Any]
+        self, payload: dict[str, Any], *, session_id: str = ""
     ) -> tuple[RouteDecision, str, bool, bool, Any]:
         cfg = self.config_store.get_config()
-        req = normalize_anthropic_messages(payload)
+        req = normalize_anthropic_messages(payload, session_id=session_id)
         decision = await self.choose_route(cfg, req)
 
         openai_payload = anthropic_to_openai_payload(payload)

@@ -154,6 +154,18 @@ def anthropic_to_openai_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
         # Helps models avoid silent/empty turns in tool loops.
         tool_hint = os.getenv("ROUTER_TOOLUSE_SYSTEM_HINT", DEFAULT_TOOLUSE_SYSTEM_HINT).strip()
+        if not tool_hint:
+            from pathlib import Path
+            import yaml
+
+            from .shared import TOOLUSE_SYSTEM_HINT_PATH
+
+            if TOOLUSE_SYSTEM_HINT_PATH.exists():
+                loaded_hint = yaml.safe_load(TOOLUSE_SYSTEM_HINT_PATH.read_text(encoding="utf-8"))
+                if isinstance(loaded_hint, dict):
+                    tool_hint = str(loaded_hint.get("tooluse_system_hint", "")).strip()
+                elif loaded_hint is not None:
+                    tool_hint = str(loaded_hint).strip()
         if tool_hint:
             if openai_messages and openai_messages[0].get("role") == "system":
                 current = str(openai_messages[0].get("content") or "")
@@ -662,6 +674,7 @@ def _route_headers(cfg: RouterConfig, decision: RouteDecision, final_alias: str,
         "x-router-selected-model": cfg.models[final_alias].model_id,
         "x-router-judge-model": decision.judge_model_id or "none",
         "x-router-reason": decision.reason,
+        "x-router-session-id": decision.session_id or "",
         "x-router-fallback": "1" if used_fallback else "0",
         "x-router-thinking-requested": "1" if decision.thinking_requested else "0",
         "x-router-thinking-applied": "1" if thinking_applied else "0",
@@ -685,6 +698,7 @@ def _log_route_analytics(
         "event": "route_analytics",
         "v": 1,
         "request_id": decision.request_id,
+        "session_id": decision.session_id,
         "source": decision.source_api,
         "requested_model": decision.requested_model,
         "initial_alias": decision.selected_alias,
@@ -768,6 +782,7 @@ def _log_output_analytics(
         "event": "output_analytics",
         "v": 1,
         "request_id": decision.request_id,
+        "session_id": decision.session_id,
         "source": source_api,
         "initial_alias": decision.selected_alias,
         "selected_alias": final_alias,
