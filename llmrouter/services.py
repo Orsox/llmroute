@@ -428,6 +428,7 @@ class ModelAvailabilityMonitor:
                         models_status.append(
                             {
                                 "alias": alias,
+                                "enabled": profile.enabled,
                                 "model_id": expected_model_id,
                                 "upstream_ref": upstream_ref,
                                 "matched_upstream_id": matched_id or None,
@@ -438,8 +439,9 @@ class ModelAvailabilityMonitor:
                             }
                         )
 
-                    all_available = bool(models_status) and all(item["available"] for item in models_status)
-                    all_loaded = bool(models_status) and all(item["loaded"] for item in models_status)
+                    enabled_models = [item for item in models_status if item["enabled"]]
+                    all_available = bool(enabled_models) and all(item["available"] for item in enabled_models)
+                    all_loaded = bool(enabled_models) and all(item["loaded"] for item in enabled_models)
                     catalog_paths = sorted(
                         {
                             str(item.get("catalog_path"))
@@ -862,6 +864,8 @@ class RouterService:
 
     @staticmethod
     def _is_deep_enabled(cfg: RouterConfig) -> bool:
+        if not cfg.is_alias_enabled("deep"):
+            return False
         if not _env_flag("DEEP_ENABLED", default=False):
             return False
         try:
@@ -872,6 +876,42 @@ class RouterService:
             logger.warning("deep_route_disabled reason=missing_api_key env=%s", deep_upstream.api_key_env)
             return False
         return True
+
+    @staticmethod
+    def _is_agentic_request(req: UnifiedRequest) -> bool:
+        return bool(req.needs_tooluse or req.tool_loop_context)
+
+    @staticmethod
+    def _judge_model_alias(cfg: RouterConfig) -> Optional[str]:
+        # Wir bevorzugen small für den Judge, falls aktiviert und verfügbar.
+        # Aber falls wir für Agenten nur large/deep erlauben wollen, sollte der Judge vielleicht auch darauf basieren?
+        # Die Anforderung sagt "Wenn agenten genutzt werden soll beim llm nur large oder deep genutzt werden."
+        # Das bezieht sich primär auf das finale Modell. Der Judge selbst kann klein bleiben,
+        # solange er die Regel kennt (was er durch den System Prompt tut).
+        for alias in ("small", "large", "deep", "backup"):
+            if cfg.is_alias_enabled(alias):
+                if alias == "deep" and not RouterService._is_deep_enabled(cfg):
+                    continue
+                return alias
+        return None
+
+    @classmethod
+    def _judge_model_id(cls, cfg: RouterConfig) -> Optional[str]:
+        alias = cls._judge_model_alias(cfg)
+        if not alias:
+            return None
+        return cfg.models[alias].model_id
+
+    @staticmethod
+    def _fallback_alias(cfg: RouterConfig, req: UnifiedRequest) -> Optional[str]:
+        is_agentic = RouterService._is_agentic_request(req)
+        preferred = ("large", "deep") if is_agentic else ("backup", "large", "deep", "small")
+        for alias in preferred:
+            if cfg.is_alias_enabled(alias):
+                if alias == "deep" and not RouterService._is_deep_enabled(cfg):
+                    continue
+                return alias
+        return None
 
     @staticmethod
     def _is_lightweight_anthropic_request(cfg: RouterConfig, req: UnifiedRequest, is_coding: bool) -> bool:
@@ -1480,8 +1520,13 @@ class RouterService:
     def _eligible_aliases(self, cfg: RouterConfig, req: UnifiedRequest) -> list[str]:
         required = req.required_capabilities
         total_tokens = req.routing_estimated_total_tokens
+        is_agentic = self._is_agentic_request(req)
         aliases: list[str] = []
         for alias, profile in cfg.models.items():
+            if not profile.enabled:
+                continue
+            if is_agentic and alias not in ("large", "deep"):
+                continue
             if alias == "deep" and not self._is_deep_enabled(cfg):
                 continue
             if profile.has_capabilities(required) and profile.context_window >= total_tokens:
@@ -1492,7 +1537,7 @@ class RouterService:
         if not model_id:
             return None
         for alias, profile in cfg.models.items():
-            if profile.model_id == model_id:
+            if profile.enabled and profile.model_id == model_id:
                 return alias
         return None
 
@@ -1588,7 +1633,10 @@ class RouterService:
         is_commit_task: bool = False,
         is_file_search: bool = False,
     ) -> tuple[Optional[str], Optional[bool]]:
-        judge_alias = "small"
+        judge_alias = self._judge_model_alias(cfg)
+        if not judge_alias:
+            logger.warning("judge_unavailable reason=no_enabled_judge_model")
+            return None, None
         judge_model = cfg.models[judge_alias].model_id
         candidate_list = list(candidates)
         if len(candidate_list) <= 1:
@@ -1668,14 +1716,14 @@ class RouterService:
                 "Set thinking=on only if the selected route supports thinking and the task clearly benefits from it.",
                 "Never set thinking=on when tools/tool-use are required.",
                 "Set thinking=off for lightweight text tasks like commit messages, PR titles/descriptions, changelogs, or summaries.",
-                "Prefer small for tool-use flows when available.",
+                "When tools, agent flows, or tool-loop context are involved, only choose large or deep.",
                 "Prefer small for file search / file lookup tasks when available.",
                 "Only compare with recent requests from the same session_id; ignore all other sessions.",
                 "If no session_id is available, do not assume prior context from other clients.",
                 "If the immediately previous request in the same session is highly similar and compatible, treat it as loop risk.",
                 "When loop risk is high, prefer the next stronger candidate to break repetition.",
             ],
-            "policy": "Prefer small by default. Use large for regular coding tasks. Use deep only for explicitly complex/high-stakes reasoning or web-search.",
+            "policy": "Prefer small by default. Use large for regular coding tasks. Use deep only for explicitly complex/high-stakes reasoning or web-search. Agent/tool-use flows must stay on large or deep.",
             "preference": "Prefer small by default.",
         }
         judge_system_prompt = ""

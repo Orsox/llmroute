@@ -73,6 +73,7 @@ class RouterIdentitySettings(BaseModel):
 
 
 class ModelProfile(BaseModel):
+    enabled: bool = True
     model_id: str
     context_window: int
     capabilities: list[str]
@@ -117,6 +118,10 @@ class RouterConfig(BaseModel):
         if settings is None:
             raise ValueError(f"Unknown upstream_ref '{upstream_ref}' for alias '{alias}'")
         return settings
+
+    def is_alias_enabled(self, alias: str) -> bool:
+        profile = self.models.get(alias)
+        return bool(profile and profile.enabled)
 
 
 class WindowsStartupToggleRequest(BaseModel):
@@ -241,6 +246,7 @@ def _default_config() -> dict[str, Any]:
         },
         "models": {
             "small": {
+                "enabled": True,
                 "model_id": "qwen/qwen3-vl-8b",
                 "context_window": 32996,
                 "capabilities": ["chat", "completions", "vision", "tooluse"],
@@ -250,6 +256,7 @@ def _default_config() -> dict[str, Any]:
                 "suitable_for": "Fast routing judge, low latency chat, multimodal light tasks.",
             },
             "large": {
+                "enabled": True,
                 "model_id": "qwen/qwen3.5-35b-a3b",
                 "context_window": 262144,
                 "capabilities": ["chat", "completions", "tooluse"],
@@ -259,6 +266,7 @@ def _default_config() -> dict[str, Any]:
                 "suitable_for": "Higher complexity reasoning and long-context workloads.",
             },
             "deep": {
+                "enabled": True,
                 "model_id": deep_model_id,
                 "context_window": 400000,
                 "capabilities": ["chat", "completions", "tooluse"],
@@ -268,6 +276,7 @@ def _default_config() -> dict[str, Any]:
                 "suitable_for": "High-stakes reasoning and strict rule/compliance tasks.",
             },
             "backup": {
+                "enabled": True,
                 "model_id": "gpt-4o-mini",
                 "context_window": 128000,
                 "capabilities": ["chat", "completions", "tooluse"],
