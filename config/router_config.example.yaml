@@ -28,13 +28,13 @@ routing:
   analytics_enabled: true
   analytics_sqlite_path: logs/router_analytics.sqlite
   heuristics:
-    large_prompt_token_threshold: 2200
-    large_max_tokens_threshold: 1800
+    large_prompt_token_threshold: 32000
+    large_max_tokens_threshold: 64000
     judge_temperature: 0.0
     judge_max_tokens: 512
     judge_prompt_context_chars: 6000
     lightweight_max_tokens_cap: 768
-    suspect_default_max_tokens_threshold: 8192
+    suspect_default_max_tokens_threshold: 64000
   session_memory:
     enabled: true
     require_session_id: true

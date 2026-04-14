@@ -311,6 +311,10 @@ class ModelAvailabilityMonitor:
     def _normalize_model_id(value: str) -> str:
         return value.strip().lower()
 
+    @staticmethod
+    def _should_poll_upstream(upstream_ref: str) -> bool:
+        return (upstream_ref or "").strip().lower() != "deep"
+
     @classmethod
     def _model_id_matches(cls, expected: str, actual: str) -> bool:
         return cls._normalize_model_id(expected) == cls._normalize_model_id(actual)
@@ -378,14 +382,28 @@ class ModelAvailabilityMonitor:
                 try:
                     upstream_catalogs: dict[str, dict[str, Any]] = {}
                     for upstream_ref, upstream_settings in cfg.upstreams.items():
-                        try:
-                            path, items = await list_models_fn(upstream_settings)
-                            upstream_catalogs[upstream_ref] = {"path": path, "items": items, "error": None}
-                        except Exception as upstream_exc:  # noqa: BLE001
+                        if self._should_poll_upstream(upstream_ref):
+                            try:
+                                path, items = await list_models_fn(upstream_settings)
+                                upstream_catalogs[upstream_ref] = {
+                                    "path": path,
+                                    "items": items,
+                                    "error": None,
+                                    "skipped": False,
+                                }
+                            except Exception as upstream_exc:  # noqa: BLE001
+                                upstream_catalogs[upstream_ref] = {
+                                    "path": None,
+                                    "items": [],
+                                    "error": str(upstream_exc),
+                                    "skipped": False,
+                                }
+                        else:
                             upstream_catalogs[upstream_ref] = {
                                 "path": None,
                                 "items": [],
-                                "error": str(upstream_exc),
+                                "error": None,
+                                "skipped": True,
                             }
                         upstream_status.append(
                             {
@@ -394,6 +412,7 @@ class ModelAvailabilityMonitor:
                                 "base_url": upstream_settings.base_url,
                                 "catalog_path": upstream_catalogs[upstream_ref]["path"],
                                 "error": upstream_catalogs[upstream_ref]["error"],
+                                "skipped": upstream_catalogs[upstream_ref]["skipped"],
                             }
                         )
 
@@ -402,6 +421,21 @@ class ModelAvailabilityMonitor:
                         profile = cfg.models[alias]
                         upstream_ref = (profile.upstream_ref or "").strip() or "local"
                         upstream_data = upstream_catalogs.get(upstream_ref, {"items": [], "error": "unknown_upstream_ref"})
+                        if upstream_data.get("skipped"):
+                            models_status.append(
+                                {
+                                    "alias": alias,
+                                    "model_id": expected_model_id,
+                                    "upstream_ref": upstream_ref,
+                                    "matched_upstream_id": None,
+                                    "available": True,
+                                    "loaded": True,
+                                    "loaded_inferred": False,
+                                    "upstream_error": None,
+                                    "poll_skipped": True,
+                                }
+                            )
+                            continue
                         items = upstream_data.get("items") or []
 
                         matched_item: Optional[dict[str, Any]] = None
@@ -436,6 +470,7 @@ class ModelAvailabilityMonitor:
                                 "loaded": loaded,
                                 "loaded_inferred": loaded_inferred,
                                 "upstream_error": upstream_data.get("error"),
+                                "poll_skipped": False,
                             }
                         )
 

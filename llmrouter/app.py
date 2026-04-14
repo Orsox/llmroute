@@ -241,7 +241,7 @@ def create_app(
     @app_instance.get('/admin/status', response_class=HTMLResponse)
     async def admin_status_page(request: Request) -> str:
         await require_auth(request)
-        return _admin_status_html()
+        return _admin_status_html(store.get_config())
 
     @app_instance.get('/admin/config')
     async def admin_get_config(request: Request) -> PlainTextResponse:

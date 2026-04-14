@@ -954,6 +954,10 @@ def test_admin_status_page_is_human_readable(cfg_file: Path) -> None:
     assert resp.status_code == 200
     assert "Router Status" in resp.text
     assert "/admin/model-availability" in resp.text
+    assert "Lokaler Router" in resp.text
+    assert "127.0.0.1:12345" in resp.text
+    assert 'href="http://127.0.0.1:12345"' in resp.text
+    assert "Kopieren" in resp.text
 
 
 def test_anthropic_to_openai_translates_tool_result_to_tool_role() -> None:
@@ -1127,7 +1131,11 @@ def test_model_availability_endpoint_reports_models_loaded(cfg_file: Path) -> No
         assert body["all_available"] is True
         assert body["all_loaded"] is True
         assert body["error"] is None
-        assert lm.list_calls >= 1
+        assert lm.list_calls == 1
+        deep_upstream = next(item for item in body["upstreams"] if item["upstream_ref"] == "deep")
+        assert deep_upstream["skipped"] is True
+        backup_model = next(item for item in body["models"] if item["alias"] == "backup")
+        assert backup_model["poll_skipped"] is True
 
 
 def test_model_availability_endpoint_flags_missing_models(cfg_file: Path) -> None:

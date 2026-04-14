@@ -271,8 +271,11 @@ def _admin_html() -> str:
 """
 
 
-def _admin_status_html() -> str:
-    return """<!doctype html>
+def _admin_status_html(cfg: RouterConfig) -> str:
+    reachable_base_url = _admin_base_url(cfg.server.host, cfg.server.port)
+    reachable_host_port = reachable_base_url.replace("http://", "", 1)
+    bind_host_port = f"{cfg.server.host}:{cfg.server.port}"
+    html = """<!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
@@ -371,6 +374,32 @@ def _admin_status_html() -> str:
       font-weight: 700;
       word-break: break-word;
     }
+    .endpoint-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .endpoint-link {
+      color: var(--btn);
+      text-decoration: none;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      word-break: break-all;
+    }
+    .endpoint-link:hover {
+      text-decoration: underline;
+    }
+    .copy-btn {
+      padding: 6px 10px;
+      font-size: 12px;
+      background: #1d4ed8;
+    }
+    .box .subvalue {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      word-break: break-word;
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -417,6 +446,17 @@ def _admin_status_html() -> str:
         <div class="value" id="baseUrl">-</div>
       </div>
       <div class="box">
+        <div class="label">Lokaler Router</div>
+        <div class="value">
+          <span class="endpoint-row">
+            <a id="routerEndpointLink" class="endpoint-link" href="__ROUTER_HREF__" target="_blank" rel="noreferrer">__ROUTER_ENDPOINT__</a>
+            <button type="button" class="copy-btn" onclick="copyRouterAddress()">Kopieren</button>
+          </span>
+        </div>
+        <div class="subvalue" id="routerBind">__ROUTER_BIND__</div>
+        <div class="subvalue" id="copyStatus" aria-live="polite"></div>
+      </div>
+      <div class="box">
         <div class="label">Model Catalog</div>
         <div class="value" id="catalogPath">-</div>
       </div>
@@ -459,6 +499,16 @@ def _admin_status_html() -> str:
       if (value === true) return '<span class="pill ok">Ja</span>';
       if (value === false) return '<span class="pill bad">Nein</span>';
       return '<span class="pill warn">Unklar</span>';
+    }
+    async function copyRouterAddress() {
+      const value = document.getElementById("routerEndpointLink").href;
+      const status = document.getElementById("copyStatus");
+      try {
+        await navigator.clipboard.writeText(value);
+        status.textContent = "Kopiert: " + value;
+      } catch (err) {
+        status.textContent = "Kopieren nicht möglich: " + err;
+      }
     }
     async function refreshStatus() {
       const overallBadge = document.getElementById("overallBadge");
@@ -527,6 +577,11 @@ def _admin_status_html() -> str:
 </body>
 </html>
 """
+    return (
+        html.replace("__ROUTER_ENDPOINT__", reachable_host_port)
+        .replace("__ROUTER_HREF__", reachable_base_url)
+        .replace("__ROUTER_BIND__", f"Bindet an {bind_host_port}")
+    )
 
 def _admin_base_url(host: str, port: int) -> str:
     browser_host = host.strip() or "127.0.0.1"
