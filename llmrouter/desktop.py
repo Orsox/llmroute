@@ -179,6 +179,8 @@ def _admin_html() -> str:
       <input id="tokenInput" placeholder="Optional Bearer token for protected API/UI">
       <button onclick="loadConfig()">Load config</button>
       <button onclick="saveConfig()">Save config</button>
+      <button onclick="window.location.href='/admin/issues'">Issues</button>
+      <button onclick="window.location.href='/admin/status'">Status</button>
     </div>
     <div class="row">
       <label class="inline">
@@ -265,6 +267,295 @@ def _admin_html() -> str:
     }
     loadConfig();
     loadWindowsStartup();
+  </script>
+</body>
+</html>
+"""
+
+
+def _admin_issues_html() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Router Issues</title>
+  <style>
+    :root {
+      --bg: #f3f7fb;
+      --surface: #ffffff;
+      --ink: #172133;
+      --muted: #5e6d84;
+      --line: #d7dfeb;
+      --accent: #0f6ad9;
+      --accent-dark: #0a4fa6;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", sans-serif;
+    }
+    .shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 16px;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .panel h1, .panel h2 {
+      margin: 0 0 14px;
+    }
+    .field {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    input, select, textarea, button {
+      font: inherit;
+    }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      box-sizing: border-box;
+    }
+    textarea {
+      min-height: 140px;
+      resize: vertical;
+    }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover {
+      background: var(--accent-dark);
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .group {
+      margin-bottom: 18px;
+    }
+    .group-title {
+      font-size: 18px;
+      margin: 0 0 10px;
+    }
+    .issue {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: #fbfdff;
+    }
+    .issue-head {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .meta {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 12px;
+      background: #e7f0ff;
+      color: #0b57b5;
+      font-weight: 700;
+    }
+    .status {
+      min-height: 20px;
+      color: var(--muted);
+    }
+    @media (max-width: 920px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <h1>Issue Tracking</h1>
+      <div class="field">
+        <label for="tokenInput">Bearer Token</label>
+        <input id="tokenInput" placeholder="Optional token">
+      </div>
+      <div class="field">
+        <label for="projectKey">Projekt</label>
+        <input id="projectKey" placeholder="router-admin">
+      </div>
+      <div class="field">
+        <label for="issueTitle">Titel</label>
+        <input id="issueTitle" placeholder="Projektweise Sortierung im Admin erweitern">
+      </div>
+      <div class="field">
+        <label for="issuePriority">Prioritaet</label>
+        <select id="issuePriority">
+          <option value="medium">medium</option>
+          <option value="low">low</option>
+          <option value="high">high</option>
+          <option value="critical">critical</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="issueDescription">Beschreibung</label>
+        <textarea id="issueDescription" placeholder="Issue-Details"></textarea>
+      </div>
+      <div class="toolbar">
+        <button onclick="createIssue()">Issue anlegen</button>
+        <button onclick="window.location.href='/admin'">Zurueck</button>
+      </div>
+      <div class="status" id="createStatus"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Nach Projekten sortiert</h2>
+      <div class="toolbar">
+        <select id="filterProject"></select>
+        <select id="filterStatus">
+          <option value="">Alle Stati</option>
+          <option value="open">open</option>
+          <option value="in_progress">in_progress</option>
+          <option value="review">review</option>
+          <option value="done">done</option>
+        </select>
+        <select id="sortBy">
+          <option value="project">project</option>
+          <option value="created_at">created_at</option>
+          <option value="updated_at">updated_at</option>
+          <option value="priority">priority</option>
+          <option value="status">status</option>
+        </select>
+        <button onclick="loadIssues()">Aktualisieren</button>
+      </div>
+      <div id="issuesRoot"></div>
+    </section>
+  </div>
+  <script>
+    function headers(contentType = null) {
+      const headers = {};
+      if (contentType) headers["Content-Type"] = contentType;
+      const token = document.getElementById("tokenInput").value.trim();
+      if (token) headers["Authorization"] = "Bearer " + token;
+      return headers;
+    }
+
+    async function loadProjects() {
+      const res = await fetch("/api/projects", { headers: headers() });
+      const projects = await res.json();
+      const select = document.getElementById("filterProject");
+      select.innerHTML = '<option value="">Alle Projekte</option>' + projects.map((project) => (
+        '<option value="' + project + '">' + project + '</option>'
+      )).join("");
+    }
+
+    function renderIssue(issue) {
+      const meta = [
+        "status: " + issue.status,
+        "priority: " + issue.priority,
+        issue.agent_name ? "agent: " + issue.agent_name : "",
+        issue.branch_name ? "branch: " + issue.branch_name : "",
+      ].filter(Boolean).join(" | ");
+      return ''
+        + '<article class="issue">'
+        + '  <div class="issue-head">'
+        + '    <strong>#' + issue.id + ' ' + issue.title + '</strong>'
+        + '    <span class="badge">' + issue.project_key + '</span>'
+        + '  </div>'
+        + '  <div class="meta">' + meta + '</div>'
+        + '  <p>' + (issue.description || '').replace(/</g, '&lt;') + '</p>'
+        + '</article>';
+    }
+
+    async function loadIssues() {
+      const project = document.getElementById("filterProject").value;
+      const status = document.getElementById("filterStatus").value;
+      const sortBy = document.getElementById("sortBy").value;
+      const query = new URLSearchParams();
+      if (project) query.set("project_key", project);
+      if (status) query.set("status", status);
+      query.set("sort_by", sortBy);
+      const res = await fetch("/api/issues?" + query.toString(), { headers: headers() });
+      const issues = await res.json();
+      const root = document.getElementById("issuesRoot");
+      if (!issues.length) {
+        root.innerHTML = '<p>Keine Issues vorhanden.</p>';
+        return;
+      }
+      if (sortBy === "project" && !project) {
+        const groups = {};
+        issues.forEach((issue) => {
+          groups[issue.project_key] = groups[issue.project_key] || [];
+          groups[issue.project_key].push(issue);
+        });
+        root.innerHTML = Object.keys(groups).map((projectKey) => (
+          '<section class="group">'
+          + '<h3 class="group-title">' + projectKey + '</h3>'
+          + groups[projectKey].map(renderIssue).join("")
+          + '</section>'
+        )).join("");
+        return;
+      }
+      root.innerHTML = issues.map(renderIssue).join("");
+    }
+
+    async function createIssue() {
+      const payload = {
+        project_key: document.getElementById("projectKey").value.trim(),
+        title: document.getElementById("issueTitle").value.trim(),
+        priority: document.getElementById("issuePriority").value,
+        description: document.getElementById("issueDescription").value.trim()
+      };
+      const res = await fetch("/api/issues", {
+        method: "POST",
+        headers: headers("application/json"),
+        body: JSON.stringify(payload)
+      });
+      const body = await res.json();
+      document.getElementById("createStatus").textContent = res.ok
+        ? "Issue #" + body.id + " gespeichert."
+        : (body.detail || "Speichern fehlgeschlagen.");
+      if (res.ok) {
+        document.getElementById("issueTitle").value = "";
+        document.getElementById("issueDescription").value = "";
+        await loadProjects();
+        await loadIssues();
+      }
+    }
+
+    loadProjects().then(loadIssues);
   </script>
 </body>
 </html>

@@ -74,6 +74,7 @@ ENV/
 logs/
 outputs/
 *.log
+.worktrees/
 
 # OS-specific files
 .DS_Store

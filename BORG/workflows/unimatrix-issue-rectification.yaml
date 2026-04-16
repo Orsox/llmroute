@@ -1,0 +1,72 @@
+workflow_name: unimatrix-issue-rectification
+purpose: "Resolve one tracked issue end to end through a Borg-style rectification cycle with the collective, local issue tracker, and git worktrees."
+uses_agents:
+  - "BORG/agents/enterprise-collective.yaml#One of Five"
+  - "BORG/agents/enterprise-collective.yaml#Two of Five"
+  - "BORG/agents/enterprise-collective.yaml#Three of Five"
+  - "BORG/agents/enterprise-collective.yaml#Four of Five"
+  - "BORG/agents/enterprise-collective.yaml#Five of Five"
+uses_skills:
+  - "BORG/skills/issue-fix-worktree/SKILL.md"
+inputs:
+  - issue_id
+  - project_key
+  - active_designation
+  - preferred_base_branch
+outputs:
+  - updated_issue_status
+  - worktree_path
+  - verification_summary
+  - review_commit_hash
+entry_conditions:
+  - "The target issue exists in the local tracker."
+  - "The issue status is open or in_progress."
+  - "A Borg designation has been assigned."
+sequence:
+  - step: "Scope confirmation"
+    owner: "One of Five"
+    actions:
+      - "Read the issue and restate the expected outcome."
+      - "Confirm the correct project_key and note missing acceptance details."
+    handoff: "Two of Five"
+  - step: "Triage"
+    owner: "Two of Five"
+    actions:
+      - "Confirm priority and whether the issue is ready to be fixed now."
+      - "Select the next issue candidate if no issue_id was supplied."
+    handoff: "Three of Five"
+  - step: "Worktree assimilation"
+    owner: "Three of Five"
+    actions:
+      - "Use the issue-fix-worktree skill."
+      - "Claim the issue with scripts/agent_issue_worktree.ps1 or scripts/agent_issue_worktree.sh."
+      - "Create the dedicated worktree from the configured base branch."
+      - "Capture branch name and worktree path in the issue record."
+    handoff: "Four of Five"
+  - step: "Implementation"
+    owner: "Four of Five"
+    actions:
+      - "Work only inside the claimed worktree."
+      - "Implement the smallest complete fix that matches repository patterns."
+      - "Run focused tests or verification for touched behavior."
+      - "Commit with a message formatted as fix(issue-<id>): <summary>."
+      - "Move the issue status to review."
+    handoff: "Five of Five"
+  - step: "Closure"
+    owner: "Five of Five"
+    actions:
+      - "Review the worktree diff and verification notes."
+      - "Merge or cherry-pick the approved fix."
+      - "Record the final commit hash."
+      - "Mark the issue done."
+    handoff: "One of Five"
+command_map:
+  list_issues: "powershell -ExecutionPolicy Bypass -File scripts/agent_issue_worktree.ps1 -Command list -SortBy project"
+  claim_issue: "powershell -ExecutionPolicy Bypass -File scripts/agent_issue_worktree.ps1 -Command claim -Agent \"Three of Five\""
+  review_commit: "powershell -ExecutionPolicy Bypass -File scripts/agent_issue_worktree.ps1 -Command commit -IssueId <id> -Message \"fix(issue-<id>): <summary>\""
+  close_issue: "powershell -ExecutionPolicy Bypass -File scripts/agent_issue_worktree.ps1 -Command complete -IssueId <id> -CommitHash <sha>"
+success_criteria:
+  - "The issue tracker reflects the current owner and status."
+  - "The fix lives on a dedicated Borg worktree branch."
+  - "Verification is recorded before closure."
+  - "The issue ends in done with a final commit hash."

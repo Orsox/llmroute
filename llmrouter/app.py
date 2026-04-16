@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Str
 
 from .desktop import (
     _admin_html,
+    _admin_issues_html,
     _admin_settings_html,
     _admin_status_html,
     _get_windows_startup_status,
@@ -19,6 +20,7 @@ from .desktop import (
     _set_windows_startup_enabled,
     run_with_tray,
 )
+from .issues import IssueClaimRequest, IssueCreateRequest, IssueStore, IssueUpdateRequest
 from .protocols import (
     _build_models_response,
     _log_route_analytics,
@@ -77,6 +79,7 @@ def create_app(
     analytics_store = AnalyticsStore(store)
     set_analytics_store(analytics_store)
     monitor = ModelAvailabilityMonitor(store, service.lm_client, check_interval_seconds=model_check_interval_seconds)
+    issue_store = IssueStore()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -100,6 +103,7 @@ def create_app(
     app_instance.state.router_service = service
     app_instance.state.analytics_store = analytics_store
     app_instance.state.model_availability_monitor = monitor
+    app_instance.state.issue_store = issue_store
 
     @app_instance.middleware('http')
     async def request_logging_middleware(request: Request, call_next):
@@ -243,6 +247,11 @@ def create_app(
         await require_auth(request)
         return _admin_status_html(store.get_config())
 
+    @app_instance.get('/admin/issues', response_class=HTMLResponse)
+    async def admin_issues_page(request: Request) -> str:
+        await require_auth(request)
+        return _admin_issues_html()
+
     @app_instance.get('/admin/config')
     async def admin_get_config(request: Request) -> PlainTextResponse:
         await require_auth(request)
@@ -279,6 +288,53 @@ def create_app(
         await require_auth(request)
         payload = WindowsStartupToggleRequest.model_validate(await request.json())
         return JSONResponse(_set_windows_startup_enabled(payload.enabled))
+
+    @app_instance.get('/api/projects')
+    async def list_projects(request: Request) -> JSONResponse:
+        await require_auth(request)
+        return JSONResponse(issue_store.project_keys())
+
+    @app_instance.get('/api/issues')
+    async def list_issues(
+        request: Request,
+        project_key: str = "",
+        status: str = "",
+        sort_by: str = "project",
+    ) -> JSONResponse:
+        await require_auth(request)
+        return JSONResponse(
+            issue_store.list_issues(project_key=project_key, status=status, sort_by=sort_by)
+        )
+
+    @app_instance.get('/api/issues/grouped')
+    async def grouped_issues(request: Request, status: str = "") -> JSONResponse:
+        await require_auth(request)
+        return JSONResponse(issue_store.grouped_issues(status=status))
+
+    @app_instance.post('/api/issues')
+    async def create_issue(request: Request) -> JSONResponse:
+        await require_auth(request)
+        payload = IssueCreateRequest.model_validate(await request.json())
+        return JSONResponse(issue_store.create_issue(payload), status_code=201)
+
+    @app_instance.patch('/api/issues/{issue_id}')
+    async def update_issue(issue_id: int, request: Request) -> JSONResponse:
+        await require_auth(request)
+        payload = IssueUpdateRequest.model_validate(await request.json())
+        try:
+            issue = issue_store.update_issue(issue_id, payload)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return JSONResponse(issue)
+
+    @app_instance.post('/api/issues/claim')
+    async def claim_issue(request: Request) -> JSONResponse:
+        await require_auth(request)
+        payload = IssueClaimRequest.model_validate(await request.json())
+        issue = issue_store.claim_next_issue(payload)
+        if issue is None:
+            raise HTTPException(status_code=404, detail='No open issue available')
+        return JSONResponse(issue)
 
     @app_instance.get('/settings', response_class=HTMLResponse)
     async def settings_page(request: Request) -> str:

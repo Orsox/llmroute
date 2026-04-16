@@ -289,6 +289,11 @@ def cfg_file(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(autouse=True)
+def _issue_db_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("ROUTER_ISSUES_DB_PATH", str(tmp_path / "router_issues.sqlite"))
+
+
+@pytest.fixture(autouse=True)
 def _default_deep_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DEEP_ENABLED", "false")
 
@@ -958,6 +963,74 @@ def test_admin_status_page_is_human_readable(cfg_file: Path) -> None:
     assert "127.0.0.1:12345" in resp.text
     assert 'href="http://127.0.0.1:12345"' in resp.text
     assert "Kopieren" in resp.text
+
+
+def test_issue_api_creates_and_lists_grouped_by_project(cfg_file: Path) -> None:
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+
+    first = client.post(
+        "/api/issues",
+        json={
+            "project_key": "router-ui",
+            "title": "Issues im Admin anzeigen",
+            "description": "Sortierung nach Projekten",
+            "priority": "medium",
+        },
+    )
+    second = client.post(
+        "/api/issues",
+        json={
+            "project_key": "agent-worktrees",
+            "title": "Worktree-Agenten anbinden",
+            "description": "PS1 und SH nutzen",
+            "priority": "high",
+        },
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    listing = client.get("/api/issues?sort_by=project")
+    assert listing.status_code == 200
+    body = listing.json()
+    assert [item["project_key"] for item in body] == ["agent-worktrees", "router-ui"]
+
+    grouped = client.get("/api/issues/grouped")
+    assert grouped.status_code == 200
+    groups = grouped.json()
+    assert groups[0]["project_key"] == "agent-worktrees"
+    assert groups[1]["project_key"] == "router-ui"
+
+
+def test_issue_claim_endpoint_prefers_high_priority(cfg_file: Path) -> None:
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+    client.post(
+        "/api/issues",
+        json={
+            "project_key": "router-ui",
+            "title": "Kleinere Korrektur",
+            "description": "",
+            "priority": "low",
+        },
+    )
+    client.post(
+        "/api/issues",
+        json={
+            "project_key": "router-ui",
+            "title": "Wichtige Worktree-Automation",
+            "description": "",
+            "priority": "critical",
+        },
+    )
+
+    resp = client.post("/api/issues/claim", json={"agent_name": "Three of Five"})
+    assert resp.status_code == 200
+    issue = resp.json()
+    assert issue["title"] == "Wichtige Worktree-Automation"
+    assert issue["status"] == "in_progress"
+    assert issue["agent_name"] == "Three of Five"
 
 
 def test_anthropic_to_openai_translates_tool_result_to_tool_role() -> None:
