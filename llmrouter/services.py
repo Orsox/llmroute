@@ -425,6 +425,7 @@ class ModelAvailabilityMonitor:
                             models_status.append(
                                 {
                                     "alias": alias,
+                                    "enabled": profile.enabled,
                                     "model_id": expected_model_id,
                                     "upstream_ref": upstream_ref,
                                     "matched_upstream_id": None,
@@ -504,7 +505,7 @@ class ModelAvailabilityMonitor:
                         )
                 except Exception as exc:  # noqa: BLE001
                     error = str(exc)
-                    logger.warning("model_availability_check_failed error=%s", exc)
+                    logger.warning("model_availability_check_failed error=%r", exc)
 
             status = {
                 "last_checked_at": checked_at,
