@@ -1,0 +1,132 @@
+{
+  "_comment": "Modell-Prioritätsliste für automatische Zuordnung zu Router-Kategorien. Pro Kategorie wird das erste verfügbare Modell aus der Liste gewählt. Muster werden als Substring-Match (case-insensitive) gegen die Modell-IDs der Upstream-Instanzen geprüft.",
+  "small": {
+    "description": "Schnelle, kleine Modelle für einfache Aufgaben und als Routing-Judge.",
+    "upstream_ref": "local",
+    "defaults": {
+      "context_window": 65536,
+      "capabilities": [
+        "chat",
+        "completions",
+        "vision",
+        "tooluse"
+      ],
+      "supports_thinking": true,
+      "relative_speed": 3.0,
+      "suitable_for": "Fast routing judge, low latency chat, multimodal light tasks."
+    },
+    "priority": [
+      "qwen3.5-9b",
+      "qwen3-8b",
+      "qwen2.5-7b-instruct",
+      "gemma-3-12b",
+      "gemma-2-9b",
+      "phi-4-mini",
+      "phi-3.5-mini",
+      "llama-3.2-8b",
+      "llama-3.1-8b",
+      "mistral-7b",
+      "deepseek-r1-distill-qwen-7b",
+      "mistralai/devstral-small-2-2512",
+      "qwen/qwen3-vl-8b"
+    ]
+  },
+  "large": {
+    "description": "Leistungsstarke Modelle für komplexe Aufgaben und langes Kontextfenster.",
+    "upstream_ref": "local",
+    "defaults": {
+      "context_window": 131072,
+      "capabilities": [
+        "chat",
+        "completions",
+        "tooluse"
+      ],
+      "supports_thinking": false,
+      "relative_speed": 1.0,
+      "suitable_for": "Higher complexity reasoning and long-context workloads."
+    },
+    "priority": [
+      "qwen3-coder",
+      "qwen3-32b",
+      "qwen3-30b",
+      "qwen2.5-coder-32b",
+      "qwen2.5-32b",
+      "deepseek-coder-v2",
+      "deepseek-r1-distill-qwen-32b",
+      "codellama-34b",
+      "llama-3.1-70b",
+      "llama-3.3-70b",
+      "gemma-3-27b",
+      "mixtral-8x22b",
+      "command-r-plus",
+      "liquid/lfm2-24b-a2b",
+      "openai/gpt-oss-20b",
+      "google/gemma-4-e4b"
+    ]
+  },
+  "deep": {
+    "description": "Cloud-basierte Modelle für höchste Qualität, Agenten und Websearch.",
+    "upstream_ref": "deep",
+    "defaults": {
+      "context_window": 400000,
+      "capabilities": [
+        "chat",
+        "completions",
+        "tooluse",
+        "websearch",
+        "agents"
+      ],
+      "supports_thinking": true,
+      "relative_speed": 0.5,
+      "suitable_for": "High-stakes reasoning and strict rule/compliance tasks and use of agents."
+    },
+    "priority": [
+      "gpt-5.4",
+      "gpt-5.4-mini",
+      "gpt-4.1-mini",
+      "gpt-4.1-nano",
+      "gpt-4o-mini",
+      "gpt-4o",
+      "gpt-4-turbo",
+      "claude-sonnet-4-20250514",
+      "claude-3-5-sonnet",
+      "gpt-4-0613",
+      "gpt-4",
+      "gpt-3.5-turbo",
+      "gpt-3.5-turbo-1106",
+      "gpt-3.5-turbo-0125",
+      "gpt-4.1-2025-04-14",
+      "gpt-4.1",
+      "gpt-5-chat-latest",
+      "gpt-3.5-turbo-16k",
+      "o1",
+      "o3"
+    ]
+  },
+  "backup": {
+    "description": "Fallback-Modell mittlerer Qualität.",
+    "upstream_ref": "local",
+    "defaults": {
+      "context_window": 32768,
+      "capabilities": [
+        "chat",
+        "completions",
+        "tooluse"
+      ],
+      "supports_thinking": false,
+      "relative_speed": 3.0,
+      "suitable_for": "Fallback or medium quality task model when no other model fits constraints."
+    },
+    "priority": [
+      "qwen2.5-coder-14b-instruct",
+      "qwen2.5-coder-14b",
+      "qwen2.5-14b-instruct",
+      "codellama-13b",
+      "llama-3.2-3b",
+      "phi-4-mini",
+      "phi-3-mini",
+      "gemma-2-2b",
+      "tinyllama"
+    ]
+  }
+}

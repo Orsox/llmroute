@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import OrderedDict, deque
 from difflib import SequenceMatcher
 
@@ -525,6 +526,446 @@ class ModelAvailabilityMonitor:
     async def get_status(self) -> dict[str, Any]:
         async with self._status_lock:
             return dict(self._status)
+
+
+class ModelAutoConfigurator:
+    """Fetches available models from upstreams and auto-assigns them to
+    router categories (small, large, deep, backup) based on a priority
+    list stored in ``config/model_priorities.json``.
+
+    Unknown models (not in the priority list) are classified by asking
+    an available LLM to self-categorise via a structured prompt."""
+
+    DEFAULT_PRIORITIES_PATH = PROJECT_ROOT / "config" / "model_priorities.json"
+    DEFAULT_CLASSIFY_PROMPT_PATH = PROJECT_ROOT / "config" / "model_classify_prompt.yaml"
+
+    VALID_CATEGORIES = {"small", "large", "deep", "backup"}
+
+    def __init__(
+        self,
+        config_store: ConfigStore,
+        lm_client: Any,
+        priorities_path: Optional[Path] = None,
+        classify_prompt_path: Optional[Path] = None,
+    ):
+        self.config_store = config_store
+        self.lm_client = lm_client
+        self.priorities_path = priorities_path or self.DEFAULT_PRIORITIES_PATH
+        self.classify_prompt_path = classify_prompt_path or self.DEFAULT_CLASSIFY_PROMPT_PATH
+        self._last_result: dict[str, Any] = {}
+        self._classify_failed: set[str] = set()  # models that failed classification – skip on retry
+
+    # ------------------------------------------------------------------
+    # Priority file helpers
+    # ------------------------------------------------------------------
+
+    def _load_priorities(self) -> dict[str, Any]:
+        if not self.priorities_path.exists():
+            logger.warning("model_auto_config priorities file not found path=%s", self.priorities_path)
+            return {}
+        with open(self.priorities_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        # Strip meta keys
+        return {k: v for k, v in data.items() if not k.startswith("_")}
+
+    @staticmethod
+    def _match_priority(available_ids: list[str], priority_patterns: list[str]) -> Optional[str]:
+        """Return the first available model id that matches a priority pattern (substring, case-insensitive)."""
+        for pattern in priority_patterns:
+            pat_lower = pattern.strip().lower()
+            for model_id in available_ids:
+                if pat_lower in model_id.strip().lower():
+                    return model_id
+        return None
+
+    # ------------------------------------------------------------------
+    # Unknown-model classification via LLM
+    # ------------------------------------------------------------------
+
+    def _load_classify_prompt(self) -> dict[str, str]:
+        """Load the classification prompt templates from YAML."""
+        if not self.classify_prompt_path.exists():
+            logger.warning("model_classify_prompt not found path=%s", self.classify_prompt_path)
+            return {}
+        with open(self.classify_prompt_path, "r", encoding="utf-8") as fh:
+            return yaml.safe_load(fh) or {}
+
+    def _collect_known_patterns(self, priorities: dict[str, Any]) -> set[str]:
+        """Return the set of all priority patterns (lowered) across all categories."""
+        known: set[str] = set()
+        for prio_cfg in priorities.values():
+            for pat in prio_cfg.get("priority", []):
+                known.add(pat.strip().lower())
+        return known
+
+    def _find_unknown_models(
+        self, upstream_models: dict[str, list[str]], known_patterns: set[str]
+    ) -> list[tuple[str, str]]:
+        """Return ``[(model_id, upstream_ref), ...]`` for models not matched by any known pattern."""
+        unknown: list[tuple[str, str]] = []
+        for upstream_ref, model_ids in upstream_models.items():
+            for model_id in model_ids:
+                mid_lower = model_id.strip().lower()
+                if not any(pat in mid_lower for pat in known_patterns):
+                    unknown.append((model_id, upstream_ref))
+        return unknown
+
+    async def _classify_unknown_model(
+        self,
+        model_id: str,
+        upstream_ref: str,
+        cfg: "RouterConfig",
+        prompt_templates: dict[str, str],
+        upstream_models: Optional[dict[str, list[str]]] = None,
+    ) -> Optional[dict[str, Any]]:
+        """Ask an available LLM to classify *model_id* into a category.
+
+        Returns the parsed JSON response or ``None`` on failure.
+        Uses the *actually loaded* model (first in the upstream's model list)
+        rather than a configured-but-potentially-unloaded model.
+        """
+        system_prompt = prompt_templates.get("system", "")
+        user_template = prompt_templates.get("user_template", "")
+        if not system_prompt or not user_template:
+            return None
+
+        user_msg = user_template.format(model_id=model_id, upstream_ref=upstream_ref)
+
+        # Use the *loaded* model (first model in each upstream's list, per
+        # LM-Studio convention) for the classification request.  Fall back to
+        # configured models only if no loaded model can be determined.
+        target_upstream_ref: Optional[str] = None
+        target_model_id: Optional[str] = None
+
+        if upstream_models:
+            for uref, model_ids in upstream_models.items():
+                if model_ids and cfg.upstreams.get(uref):
+                    # First model = currently loaded in LM-Studio
+                    candidate = model_ids[0]
+                    # Don't use the model we're trying to classify
+                    if candidate != model_id:
+                        target_upstream_ref = uref
+                        target_model_id = candidate
+                        break
+
+        # Fallback: try configured categories
+        if not target_upstream_ref or not target_model_id:
+            for cat in ("small", "large", "deep", "backup"):
+                cat_cfg = cfg.models.get(cat)
+                if cat_cfg and cfg.upstreams.get(cat_cfg.upstream_ref):
+                    target_upstream_ref = cat_cfg.upstream_ref
+                    target_model_id = cat_cfg.model_id
+                    break
+
+        if not target_upstream_ref or not target_model_id:
+            logger.warning("model_classify no configured model available for classification of %s", model_id)
+            return None
+
+        upstream_settings = cfg.upstreams[target_upstream_ref]
+
+        payload = {
+            "model": target_model_id,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            "temperature": 0.1,
+            "max_tokens": 256,
+        }
+
+        post_fn = getattr(self.lm_client, "post_json", None)
+        if not callable(post_fn):
+            return None
+
+        try:
+            response = await post_fn(upstream_settings, "/v1/chat/completions", payload)
+            content = (
+                response.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+            import re
+            content_cleaned = re.sub(r"<(thought|thinking)>.*?</\1>", "", content, flags=re.DOTALL | re.IGNORECASE)
+            # If there's an unclosed tag at the beginning/middle (common in streaming or truncated responses)
+            content_cleaned = re.sub(r"<(thought|thinking)>.*", "", content_cleaned, flags=re.DOTALL | re.IGNORECASE)
+
+            # Strip markdown fences if present
+            text = content_cleaned.strip()
+            # Also try to extract JSON by finding first { and last }
+            # which might be after or before other text
+            start = text.find("{")
+            end = text.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                text = text[start : end + 1]
+            if not text:
+                logger.warning("model_classify empty response for model=%s", model_id)
+                return None
+            result = json.loads(text)
+            category = result.get("category", "").lower()
+            if category not in ("small", "large"):
+                # Fallback per user request: only small or large allowed, default to small
+                category = "small"
+            
+            result["category"] = category
+            logger.info(
+                "model_classify model=%s -> category=%s confidence=%.2f reasoning=%s",
+                model_id,
+                category,
+                result.get("confidence", 0),
+                result.get("reasoning", ""),
+            )
+            return result
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("model_classify failed model=%s error=%s", model_id, exc)
+            return None
+
+    def _add_to_priorities_file(
+        self, model_id: str, category: str, classification: dict[str, Any]
+    ) -> None:
+        """Append *model_id* to the priority list of *category* in the JSON file."""
+        try:
+            with open(self.priorities_path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if category in data and "priority" in data[category]:
+                prio_list: list[str] = data[category]["priority"]
+                # Append at end (lowest priority within category)
+                if model_id not in prio_list:
+                    prio_list.append(model_id)
+                    with open(self.priorities_path, "w", encoding="utf-8") as fh:
+                        json.dump(data, fh, indent=2, ensure_ascii=False)
+                        fh.write("\n")
+                    logger.info(
+                        "model_classify persisted model=%s in category=%s (confidence=%.2f)",
+                        model_id,
+                        category,
+                        classification.get("confidence", 0),
+                    )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("model_classify persist_failed model=%s error=%s", model_id, exc)
+
+    # ------------------------------------------------------------------
+    # Upstream fetching
+    # ------------------------------------------------------------------
+
+    async def _fetch_upstream_models(self, cfg: RouterConfig) -> dict[str, list[str]]:
+        """Return ``{upstream_ref: [model_id, ...]}`` for every upstream."""
+        list_models_fn = getattr(self.lm_client, "list_models", None)
+        if not callable(list_models_fn):
+            return {}
+
+        result: dict[str, list[str]] = {}
+        for upstream_ref, upstream_settings in cfg.upstreams.items():
+            try:
+                _, items = await list_models_fn(upstream_settings)
+                ids: list[str] = []
+                for item in items:
+                    for key in ("id", "model_id", "model", "name"):
+                        value = item.get(key)
+                        if isinstance(value, str) and value.strip():
+                            ids.append(value.strip())
+                            break
+                result[upstream_ref] = ids
+                logger.info(
+                    "model_auto_config fetched upstream=%s models=%s",
+                    upstream_ref,
+                    ids,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("model_auto_config fetch_failed upstream=%s error=%s", upstream_ref, exc)
+                result[upstream_ref] = []
+        return result
+
+    # ------------------------------------------------------------------
+    # Main entry point
+    # ------------------------------------------------------------------
+
+    async def run(self) -> dict[str, Any]:
+        """Fetch models, match priorities, update config in-memory + on disk.
+
+        Returns a summary dict of what was changed.
+        """
+        cfg = self.config_store.get_config()
+        priorities = self._load_priorities()
+        if not priorities:
+            logger.info("model_auto_config skipped – no priorities loaded")
+            self._last_result = {"skipped": True, "reason": "no_priorities"}
+            return self._last_result
+
+        upstream_models = await self._fetch_upstream_models(cfg)
+        if not any(upstream_models.values()):
+            logger.warning("model_auto_config skipped – no models fetched from any upstream")
+            self._last_result = {"skipped": True, "reason": "no_upstream_models"}
+            return self._last_result
+
+        changes: dict[str, dict[str, str]] = {}
+
+        # Build updated YAML data from current config
+        current_data = cfg.model_dump(mode="python")
+        current_data.pop("lm_studio", None)
+
+        for alias, prio_cfg in priorities.items():
+            if alias not in current_data.get("models", {}):
+                continue
+            prio_list = prio_cfg.get("priority", [])
+            upstream_ref = prio_cfg.get("upstream_ref", "local")
+            defaults = prio_cfg.get("defaults", {})
+
+            available_ids = upstream_models.get(upstream_ref, [])
+            if not available_ids:
+                logger.info("model_auto_config alias=%s upstream=%s has no models – skipping", alias, upstream_ref)
+                continue
+
+            matched_id = self._match_priority(available_ids, prio_list)
+            if not matched_id:
+                logger.info(
+                    "model_auto_config alias=%s no priority match in %d available models – keeping current",
+                    alias,
+                    len(available_ids),
+                )
+                continue
+
+            old_model_id = current_data["models"][alias].get("model_id", "")
+            if old_model_id == matched_id:
+                logger.info("model_auto_config alias=%s model_id unchanged (%s)", alias, matched_id)
+                continue
+
+            # Apply change
+            current_data["models"][alias]["model_id"] = matched_id
+            current_data["models"][alias]["upstream_ref"] = upstream_ref
+            # Apply defaults from priority file where not explicitly set in config
+            for key, value in defaults.items():
+                current_data["models"][alias][key] = value
+
+            changes[alias] = {"old": old_model_id, "new": matched_id}
+            logger.info(
+                "model_auto_config alias=%s model_id changed %s -> %s",
+                alias,
+                old_model_id,
+                matched_id,
+            )
+
+        if changes:
+            yaml_text = yaml.safe_dump(current_data, sort_keys=False, allow_unicode=False)
+            await self.config_store.update_from_yaml(yaml_text)
+            logger.info("model_auto_config config updated with %d change(s): %s", len(changes), changes)
+        else:
+            logger.info("model_auto_config no changes needed – all models already optimal")
+
+        # --- Classify unknown models via LLM ---
+        # The first model in each upstream's response is the currently loaded
+        # model (LM-Studio convention).  If it is unknown we classify it and
+        # immediately activate it for the matching router category.
+        # User requested: only ask about models that are NOT in the list AND are LOADED.
+        classifications: dict[str, dict[str, Any]] = {}
+        known_patterns = self._collect_known_patterns(priorities)
+        
+        # Filter unknown models to only include those that are currently loaded (first in list)
+        loaded_unknown_models: list[tuple[str, str]] = []
+        for upstream_ref, model_ids in upstream_models.items():
+            if model_ids:
+                first_model = model_ids[0]
+                mid_lower = first_model.strip().lower()
+                if not any(pat in mid_lower for pat in known_patterns):
+                    loaded_unknown_models.append((first_model, upstream_ref))
+
+        activated: dict[str, dict[str, str]] = {}  # category -> {model_id, upstream_ref}
+
+        if loaded_unknown_models:
+            prompt_templates = self._load_classify_prompt()
+            if prompt_templates:
+                # Re-read config in case it was updated above
+                cfg = self.config_store.get_config()
+                for model_id, upstream_ref in loaded_unknown_models:
+                    if model_id in self._classify_failed:
+                        logger.debug("model_classify skipping previously failed model=%s", model_id)
+                        continue
+                    result = await self._classify_unknown_model(
+                        model_id, upstream_ref, cfg, prompt_templates,
+                        upstream_models=upstream_models,
+                    )
+                    if result:
+                        classifications[model_id] = result
+                        self._add_to_priorities_file(model_id, result["category"], result)
+
+                        category = result["category"]
+                        if category in ("small", "large"):
+                            activated[category] = {
+                                "model_id": model_id,
+                                "upstream_ref": upstream_ref,
+                            }
+                    else:
+                        self._classify_failed.add(model_id)
+            if classifications:
+                logger.info(
+                    "model_auto_config classified %d unknown model(s): %s",
+                    len(classifications),
+                    {m: c["category"] for m, c in classifications.items()},
+                )
+
+        # --- Activate loaded-but-unknown models for their category ---
+        if activated:
+            cfg = self.config_store.get_config()
+            current_data = cfg.model_dump(mode="python")
+            current_data.pop("lm_studio", None)
+            for category, info in activated.items():
+                if category in current_data.get("models", {}):
+                    old_id = current_data["models"][category].get("model_id", "")
+                    current_data["models"][category]["model_id"] = info["model_id"]
+                    current_data["models"][category]["upstream_ref"] = info["upstream_ref"]
+                    # Apply defaults from priority file if available
+                    prio_cfg = priorities.get(category, {})
+                    for key, value in prio_cfg.get("defaults", {}).items():
+                        current_data["models"][category][key] = value
+                    changes[category] = {"old": old_id, "new": info["model_id"], "reason": "loaded_model_classified"}
+                    logger.info(
+                        "model_auto_config activated loaded model=%s for category=%s (was %s)",
+                        info["model_id"],
+                        category,
+                        old_id,
+                    )
+            yaml_text = yaml.safe_dump(current_data, sort_keys=False, allow_unicode=False)
+            await self.config_store.update_from_yaml(yaml_text)
+            logger.info("model_auto_config config updated after activating classified models")
+
+        # --- Fallback: share model between small and large if one is missing ---
+        cfg = self.config_store.get_config()
+        current_data = cfg.model_dump(mode="python")
+        current_data.pop("lm_studio", None)
+        models_cfg = current_data.get("models", {})
+        shared_fallback = False
+
+        for src, dst in [("small", "large"), ("large", "small")]:
+            src_model = models_cfg.get(src, {}).get("model_id", "")
+            dst_model = models_cfg.get(dst, {}).get("model_id", "")
+            if src_model and not dst_model and dst in models_cfg:
+                src_upstream = models_cfg[src].get("upstream_ref", "local")
+                # Verify the source model is actually available upstream
+                if src_model in [m for ms in upstream_models.values() for m in ms]:
+                    models_cfg[dst]["model_id"] = src_model
+                    models_cfg[dst]["upstream_ref"] = src_upstream
+                    changes[dst] = {"old": dst_model, "new": src_model, "reason": "shared_from_" + src}
+                    logger.info(
+                        "model_auto_config shared model=%s from %s -> %s (no dedicated model available)",
+                        src_model, src, dst,
+                    )
+                    shared_fallback = True
+
+        if shared_fallback:
+            yaml_text = yaml.safe_dump(current_data, sort_keys=False, allow_unicode=False)
+            await self.config_store.update_from_yaml(yaml_text)
+            logger.info("model_auto_config config updated after sharing models between categories")
+
+        self._last_result = {
+            "skipped": False,
+            "changes": changes,
+            "upstream_models": upstream_models,
+            "classifications": classifications,
+            "activated": activated,
+        }
+        return self._last_result
+
+    def get_last_result(self) -> dict[str, Any]:
+        return dict(self._last_result)
 
 
 class AnalyticsStore:
