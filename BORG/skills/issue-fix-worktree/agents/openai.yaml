@@ -1,0 +1,4 @@
+version: 1
+display_name: Issue Fix Worktree
+short_description: Claim, fix, verify, and hand off issues through the local Borg worktree flow.
+default_prompt: Fix the claimed issue using the Borg worktree workflow, run focused verification, and prepare the review handoff.

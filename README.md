@@ -71,6 +71,7 @@ powershell -ExecutionPolicy Bypass -File scripts/start_llm_router.ps1
 
 - [http://127.0.0.1:12345/admin](http://127.0.0.1:12345/admin)
 - [http://127.0.0.1:12345/admin/status](http://127.0.0.1:12345/admin/status)
+- [http://127.0.0.1:12345/admin/issues](http://127.0.0.1:12345/admin/issues)
 
 ---
 
@@ -106,9 +107,16 @@ Behavior highlights:
 - `GET /healthz`
 - `GET /admin`
 - `GET /admin/status`
+- `GET /admin/issues`
 - `GET /admin/config`
 - `PUT /admin/config`
 - `GET /admin/model-availability`
+- `GET /api/projects`
+- `GET /api/issues`
+- `GET /api/issues/grouped`
+- `POST /api/issues`
+- `PATCH /api/issues/{issue_id}`
+- `POST /api/issues/claim`
 
 ---
 
@@ -168,6 +176,36 @@ Thinking debug log markers (when `ROUTER_DEBUG_THINKING=true`):
 ---
 
 ## Testing
+
+## Issue Tracking
+
+- Issues are stored locally in `logs/router_issues.sqlite`
+- each issue belongs to one `project_key`
+- the admin issue page supports direct issue entry and project-based sorting
+- issue states: `open`, `in_progress`, `review`, `done`
+- priorities: `low`, `medium`, `high`, `critical`
+
+### Agent Worktrees
+
+PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/agent_issue_worktree.ps1 -Command claim -Agent "Three of Five"
+```
+
+POSIX shell:
+
+```bash
+./scripts/agent_issue_worktree.sh claim --agent "Three of Five"
+```
+
+Commit work from the reserved worktree:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/agent_issue_worktree.ps1 -Command commit -IssueId 7 -Message "feat(issue-7): add project issue sorting"
+```
+
+The Borg-style collective workflow is documented in `config/borg_collective_workflow.yaml`.
 
 ### Deep connection test (PowerShell)
 

@@ -27,7 +27,7 @@ from .protocols import (
     set_analytics_store,
 )
 from .requests import RouteDecision, UnifiedRequest, normalize_anthropic_messages, normalize_openai_chat
-from .services import AnalyticsStore, LMStudioClient, ModelAutoConfigurator, ModelAvailabilityMonitor, RouterService, UpstreamError
+from .services import AnalyticsStore, LMStudioClient, ModelAvailabilityMonitor, RouterService, UpstreamError
 from .settings import (
     DEFAULT_CONFIG_PATH,
     ConfigStore,
@@ -69,7 +69,6 @@ def create_app(
     config_path: Optional[Path] = None,
     lm_client: Optional[LMStudioClient] = None,
     model_check_interval_seconds: float = 60.0,
-    auto_configure_models: bool = False,
 ) -> FastAPI:
     cfg_path = config_path or DEFAULT_CONFIG_PATH
     logger.debug('Creating app with config path=%s', cfg_path)
@@ -77,19 +76,10 @@ def create_app(
     service = RouterService(store, lm_client=lm_client)
     analytics_store = AnalyticsStore(store)
     set_analytics_store(analytics_store)
-    auto_configurator = ModelAutoConfigurator(store, service.lm_client)
     monitor = ModelAvailabilityMonitor(store, service.lm_client, check_interval_seconds=model_check_interval_seconds)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        # Auto-configure models from upstream availability before starting the monitor
-        if auto_configure_models:
-            try:
-                result = await auto_configurator.run()
-                logger.info("model_auto_config_result %s", result)
-            except Exception as exc:
-                logger.warning("model_auto_config_failed error=%s – continuing with current config", exc)
-
         await monitor.start()
         try:
             cfg = store.get_config()
@@ -110,7 +100,6 @@ def create_app(
     app_instance.state.router_service = service
     app_instance.state.analytics_store = analytics_store
     app_instance.state.model_availability_monitor = monitor
-    app_instance.state.model_auto_configurator = auto_configurator
 
     @app_instance.middleware('http')
     async def request_logging_middleware(request: Request, call_next):
@@ -185,17 +174,6 @@ def create_app(
             await monitor.run_check_once()
             status = await monitor.get_status()
         return JSONResponse(status)
-
-    @app_instance.post('/admin/model-auto-config')
-    async def admin_run_model_auto_config(request: Request) -> JSONResponse:
-        await require_auth(request)
-        result = await auto_configurator.run()
-        return JSONResponse(result)
-
-    @app_instance.get('/admin/model-auto-config')
-    async def admin_get_model_auto_config(request: Request) -> JSONResponse:
-        await require_auth(request)
-        return JSONResponse(auto_configurator.get_last_result())
 
     @app_instance.get('/v1/models')
     async def get_models(request: Request) -> JSONResponse:
@@ -310,7 +288,7 @@ def create_app(
     return app_instance
 
 
-app = create_app(auto_configure_models=True)
+app = create_app()
 
 
 def main() -> None:
