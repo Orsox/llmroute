@@ -16,18 +16,8 @@
       "suitable_for": "Fast routing judge, low latency chat, multimodal light tasks."
     },
     "priority": [
+      "google/gemma-4-e4b",
       "qwen3.5-9b",
-      "qwen3-8b",
-      "qwen2.5-7b-instruct",
-      "gemma-3-12b",
-      "gemma-2-9b",
-      "phi-4-mini",
-      "phi-3.5-mini",
-      "llama-3.2-8b",
-      "llama-3.1-8b",
-      "mistral-7b",
-      "deepseek-r1-distill-qwen-7b",
-      "mistralai/devstral-small-2-2512",
       "qwen/qwen3-vl-8b"
     ]
   },
@@ -46,21 +36,10 @@
       "suitable_for": "Higher complexity reasoning and long-context workloads."
     },
     "priority": [
+      "qwen/qwen3-coder-next",
       "qwen3-coder",
       "qwen3-32b",
       "qwen3-30b",
-      "qwen2.5-coder-32b",
-      "qwen2.5-32b",
-      "deepseek-coder-v2",
-      "deepseek-r1-distill-qwen-32b",
-      "codellama-34b",
-      "llama-3.1-70b",
-      "llama-3.3-70b",
-      "gemma-3-27b",
-      "mixtral-8x22b",
-      "command-r-plus",
-      "liquid/lfm2-24b-a2b",
-      "openai/gpt-oss-20b",
       "google/gemma-4-e4b"
     ]
   },
