@@ -136,6 +136,7 @@ Important knobs:
 - `routing.session_memory.*` to scope request history by `x-router-session-id`
 - `routing.repetition_escalation.*` to automatically step up from `small -> large -> deep` on repeated similar prompts using in-memory request history
 - `router_identity.exposed_model_name` (default `borg-cpu`)
+- `upstreams.<name>.prefer_native_rest_api` to prefer LM Studio's native `/api/v1/*` REST endpoints for compatible local chat requests
 - `models.<alias>.upstream_ref` for per-model upstream mapping
 - `models.<alias>.supports_thinking` to mark if a model can run with thinking enabled
 
@@ -155,12 +156,17 @@ Session-aware routing:
 ## Logging
 
 - file log: `logs/router.log`
+- local LLM traffic log: `logs/local_llm_traffic.jsonl`
 - request correlation via `x-request-id`
 - relevant env vars:
   - `ROUTER_LOG_LEVEL`
   - `ROUTER_LOG_FILE`
   - `ROUTER_LOG_MAX_BYTES`
   - `ROUTER_LOG_BACKUP_COUNT`
+  - `ROUTER_LOCAL_LLM_LOG_ENABLED`
+  - `ROUTER_LOCAL_LLM_LOG_FILE`
+  - `ROUTER_LOCAL_LLM_LOG_MAX_BYTES`
+  - `ROUTER_LOCAL_LLM_LOG_BACKUP_COUNT`
   - `ROUTER_TOOLUSE_SYSTEM_HINT`
   - `ROUTER_DEBUG_THINKING` (`true|false`, default `false`)
 

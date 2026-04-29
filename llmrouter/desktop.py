@@ -1696,11 +1696,13 @@ def _admin_settings_html(cfg: RouterConfig) -> str:
       lines.push(`    provider: lm_studio`);
       lines.push(`    base_url: ${{data.local_base_url}}`);
       lines.push(`    timeout_seconds: ${{data.local_timeout}}`);
+      lines.push(`    prefer_native_rest_api: true`);
       lines.push(`    api_key_env: OPENAI_API_KEY`);
       lines.push("  deep:");
       lines.push(`    provider: openai`);
       lines.push(`    base_url: ${{data.deep_base_url}}`);
       lines.push(`    timeout_seconds: ${{data.deep_timeout}}`);
+      lines.push(`    prefer_native_rest_api: true`);
       lines.push("routing:");
       lines.push(`  judge_timeout_seconds: ${{data.judge_timeout}}`);
       lines.push(`  fallback_enabled: ${{data.routing_fallback_enabled}}`);

@@ -176,12 +176,14 @@ def create_app(
         return JSONResponse(status)
 
     @app_instance.get('/v1/models')
+    @app_instance.get('/models')
     async def get_models(request: Request) -> JSONResponse:
         await require_auth(request)
         cfg = store.get_config()
         return JSONResponse(_build_models_response(cfg))
 
     @app_instance.post('/v1/chat/completions')
+    @app_instance.post('/chat/completions')
     async def post_chat_completions(request: Request):
         await require_auth(request)
         payload = await request.json()
@@ -200,6 +202,7 @@ def create_app(
         return StreamingResponse(result, media_type='text/event-stream', headers=headers)
 
     @app_instance.post('/v1/completions')
+    @app_instance.post('/completions')
     async def post_completions(request: Request):
         await require_auth(request)
         payload = await request.json()

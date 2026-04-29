@@ -87,7 +87,37 @@ def _configure_logging() -> logging.Logger:
     return app_logger
 
 
+def _configure_local_llm_logger() -> logging.Logger:
+    traffic_logger = logging.getLogger("llm-router.local-llm")
+    if traffic_logger.handlers:
+        return traffic_logger
+
+    enabled_raw = os.getenv("ROUTER_LOCAL_LLM_LOG_ENABLED")
+    enabled = True if enabled_raw is None else enabled_raw.strip().lower() in {"1", "true", "yes", "on"}
+    traffic_logger.setLevel(logging.INFO)
+    traffic_logger.propagate = False
+    if not enabled:
+        traffic_logger.disabled = True
+        return traffic_logger
+
+    log_file_path = Path(os.getenv("ROUTER_LOCAL_LLM_LOG_FILE", "logs/local_llm_traffic.jsonl"))
+    max_bytes = int(os.getenv("ROUTER_LOCAL_LLM_LOG_MAX_BYTES", str(20 * 1024 * 1024)))
+    backup_count = int(os.getenv("ROUTER_LOCAL_LLM_LOG_BACKUP_COUNT", "5"))
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    file_handler = RotatingFileHandler(
+        log_file_path,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(logging.Formatter("%(message)s"))
+    traffic_logger.addHandler(file_handler)
+    return traffic_logger
+
+
 logger = _configure_logging()
+local_llm_logger = _configure_local_llm_logger()
 _analytics_store: Optional[Any] = None
 
 
@@ -137,6 +167,16 @@ NO_THINKING_TASK_RE = re.compile(
     r"zusammenfassen|summary|summarize|"
     r"kurzfassung|kurz zusammenfassen"
     r")\b",
+    re.IGNORECASE,
+)
+CLIENT_META_TASK_RE = re.compile(
+    r"(?:"
+    r"determine if the following context is required to solve the task|"
+    r"answer only with yes or no|"
+    r"give subqueries that would be useful to search for in project|"
+    r"suggest a most specific title for this chat|"
+    r"the title must be no longer than 7 words"
+    r")",
     re.IGNORECASE,
 )
 DEEP_REASONING_RE = re.compile(
@@ -395,6 +435,54 @@ def _log_text_max_chars() -> int:
 def _clip_for_log(text: str, max_chars: Optional[int] = None) -> str:
     limit = _log_text_max_chars() if max_chars is None else max(50, max_chars)
     return (text or "")[:limit]
+
+
+def _serialize_for_log(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _serialize_for_log(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_serialize_for_log(item) for item in value]
+    return str(value)
+
+
+def _log_local_llm_traffic(
+    event: str,
+    *,
+    provider: str,
+    base_url: str,
+    requested_path: str,
+    actual_path: str,
+    transport: str,
+    payload: Optional[Any] = None,
+    response: Optional[Any] = None,
+    status_code: Optional[int] = None,
+    duration_ms: Optional[int] = None,
+    note: str = "",
+) -> None:
+    if provider != "lm_studio" or local_llm_logger.disabled:
+        return
+
+    record = {
+        "ts": _utc_now_iso(),
+        "request_id": _request_id_ctx.get(),
+        "session_id": _session_id_ctx.get(),
+        "event": event,
+        "provider": provider,
+        "base_url": base_url,
+        "requested_path": requested_path,
+        "actual_path": actual_path,
+        "transport": transport,
+        "status_code": status_code,
+        "duration_ms": duration_ms,
+        "note": note,
+    }
+    if payload is not None:
+        record["payload"] = _serialize_for_log(payload)
+    if response is not None:
+        record["response"] = _serialize_for_log(response)
+    local_llm_logger.info(json.dumps(record, ensure_ascii=False, default=str, separators=(",", ":")))
 
 
 def _extract_assistant_text(openai_response: dict[str, Any]) -> str:

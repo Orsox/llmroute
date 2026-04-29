@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .shared import *
 from .shared import (
+    COMMIT_MESSAGE_TASK_RE,
     _estimate_tokens_from_text,
     _extract_text_and_vision,
     _extract_text_fragments,
@@ -29,9 +30,13 @@ class UnifiedRequest(BaseModel):
     has_wrapper_noise: bool = False
     tool_loop_context: bool = False
     required_base_capability: str
+    is_commit_message_task: bool = False
 
     @model_validator(mode="after")
     def _normalize_routing_fields(self) -> "UnifiedRequest":
+        if not self.prompt_text.strip() and not self.user_prompt_text.strip():
+             raise ValueError("Empty request: no prompt text or user message found")
+
         if not self.routing_prompt_text:
             self.routing_prompt_text = self.prompt_text
         if not self.routing_user_prompt_text:
@@ -99,11 +104,19 @@ def normalize_openai_chat(payload: dict[str, Any], *, session_id: str = "") -> U
     user_prompt_text = "\n".join(user_chunks)
     latest_user_prompt_text = user_chunks[-1] if user_chunks else ""
     max_tokens = payload.get("max_tokens") or payload.get("max_completion_tokens")
+    
+    is_commit_task = bool(
+        COMMIT_MESSAGE_TASK_RE.search(latest_user_prompt_text or "")
+        or COMMIT_MESSAGE_TASK_RE.search(user_prompt_text or "")
+        or COMMIT_MESSAGE_TASK_RE.search(prompt_text or "")
+    )
+    stream = bool(payload.get("stream"))
+
     return UnifiedRequest(
         source_api="openai_chat",
         session_id=session_id,
         requested_model=payload.get("model"),
-        stream=bool(payload.get("stream")),
+        stream=stream,
         max_tokens=max_tokens,
         prompt_text=prompt_text,
         user_prompt_text=user_prompt_text,
@@ -117,6 +130,7 @@ def normalize_openai_chat(payload: dict[str, Any], *, session_id: str = "") -> U
         needs_vision=needs_vision,
         needs_tooluse=needs_tooluse,
         required_base_capability="chat",
+        is_commit_message_task=is_commit_task,
     )
 
 
@@ -126,11 +140,16 @@ def normalize_openai_completion(payload: dict[str, Any], *, session_id: str = ""
         prompt_text = "\n".join(str(x) for x in prompt)
     else:
         prompt_text = str(prompt)
+    is_commit_task = bool(COMMIT_MESSAGE_TASK_RE.search(prompt_text))
+    stream = bool(payload.get("stream"))
+    if is_commit_task:
+        stream = False
+
     return UnifiedRequest(
         source_api="openai_completions",
         session_id=session_id,
         requested_model=payload.get("model"),
-        stream=bool(payload.get("stream")),
+        stream=stream,
         max_tokens=payload.get("max_tokens"),
         prompt_text=prompt_text,
         user_prompt_text=prompt_text,
@@ -144,6 +163,7 @@ def normalize_openai_completion(payload: dict[str, Any], *, session_id: str = ""
         needs_vision=False,
         needs_tooluse=False,
         required_base_capability="completions",
+        is_commit_message_task=is_commit_task,
     )
 
 
@@ -204,11 +224,22 @@ def normalize_anthropic_messages(payload: dict[str, Any], *, session_id: str = "
     )
     full_input_tokens = _estimate_tokens_from_text(prompt_text)
     routing_input_tokens = _estimate_tokens_from_text(routing_prompt_text)
+
+    is_commit_task = bool(
+        COMMIT_MESSAGE_TASK_RE.search(routing_latest_user_prompt_text or "")
+        or COMMIT_MESSAGE_TASK_RE.search(routing_user_prompt_text or "")
+        or COMMIT_MESSAGE_TASK_RE.search(routing_prompt_text or "")
+        or COMMIT_MESSAGE_TASK_RE.search(prompt_text or "")
+    )
+    stream = bool(payload.get("stream"))
+    if is_commit_task:
+        stream = False
+
     return UnifiedRequest(
         source_api="anthropic_messages",
         session_id=session_id,
         requested_model=payload.get("model"),
-        stream=bool(payload.get("stream")),
+        stream=stream,
         max_tokens=payload.get("max_tokens"),
         prompt_text=prompt_text,
         user_prompt_text=user_prompt_text,
@@ -224,6 +255,7 @@ def normalize_anthropic_messages(payload: dict[str, Any], *, session_id: str = "
         has_wrapper_noise=has_wrapper_noise,
         tool_loop_context=tool_loop_context,
         required_base_capability="chat",
+        is_commit_message_task=is_commit_task,
     )
 @dataclass
 class RouteDecision:

@@ -6,6 +6,7 @@ class LMStudioSettings(BaseModel):
     provider: Literal["lm_studio", "openai"] = "lm_studio"
     base_url: str = "http://127.0.0.1:1234"
     timeout_seconds: float = 90.0
+    prefer_native_rest_api: bool = True
     api_key: Optional[str] = None
     api_key_env: str = "OPENAI_API_KEY"
     organization: Optional[str] = None
@@ -193,6 +194,7 @@ def _default_config() -> dict[str, Any]:
                 "provider": "lm_studio",
                 "base_url": "http://192.168.178.2:1234",
                 "timeout_seconds": 120,
+                "prefer_native_rest_api": True,
                 "api_key": None,
                 "api_key_env": "OPENAI_API_KEY",
                 "organization": None,
@@ -202,6 +204,7 @@ def _default_config() -> dict[str, Any]:
                 "provider": "openai",
                 "base_url": deep_base_url,
                 "timeout_seconds": 180,
+                "prefer_native_rest_api": True,
                 "api_key": None,
                 "api_key_env": "DEEP_API_KEY",
                 "organization": None,
