@@ -212,6 +212,45 @@ ROUTING_NOISE_LINE_RE = re.compile(
     r")$",
     re.IGNORECASE,
 )
+DEBUG_TASK_RE = re.compile(
+    r"\b("
+    r"debug|bug|fehlersuche|fehlerbehebung|root cause|ursachenanalyse|"
+    r"traceback|stack\s*trace|crash|segmentation fault|error|ausnahme|"
+    r"fix the issue|behebe den fehler"
+    r")",
+    re.IGNORECASE,
+)
+ARCHITECTURE_TASK_RE = re.compile(
+    r"\b("
+    r"architecture|architektur|design|entwurf|struktur|konzept|"
+    r"system design|software architektur|trade-off|abwägung|"
+    r"diagramm|uml|sequenzdiagramm|klassendiagramm"
+    r")",
+    re.IGNORECASE,
+)
+COMPLEX_CODE_TASK_RE = re.compile(
+    r"\b("
+    r"refactor|umstrukturieren|optimieren|performance|sicherheit|"
+    r"großes refactoring|mehrdateiig|multi-file|integration|"
+    r"pattern|best practice|entwurfsmuster"
+    r")",
+    re.IGNORECASE,
+)
+AGENT_TASK_RE = re.compile(
+    r"\b("
+    r"plan|planung|schritte|agent|autonom|workflow|"
+    r"mehrstufe|multi-step|vorgehensweise"
+    r")",
+    re.IGNORECASE,
+)
+BOILERPLATE_TASK_RE = re.compile(
+    r"\b("
+    r"boilerplate|skelett|gerüst|formatierung|formatting|einrücken|"
+    r"kommentar|docstring|kdoc|javadoc|doxygen|readme|markdown|"
+    r"json|yaml|xml|csv|format"
+    r")",
+    re.IGNORECASE,
+)
 SESSION_ID_RE = re.compile(r"[^a-zA-Z0-9._:-]+")
 LIGHTWEIGHT_TASK_RE = re.compile(
     r"^(?:"
@@ -447,6 +486,14 @@ def _serialize_for_log(value: Any) -> Any:
     return str(value)
 
 
+def _pretty_log_json(record: dict[str, Any]) -> str:
+    return json.dumps(record, ensure_ascii=False, default=str, indent=2, sort_keys=True)
+
+
+def _emit_pretty_router_log(event: str, record: dict[str, Any]) -> None:
+    logger.info("%s_pretty\n%s", event, _pretty_log_json(record))
+
+
 def _log_local_llm_traffic(
     event: str,
     *,
@@ -482,6 +529,43 @@ def _log_local_llm_traffic(
         record["payload"] = _serialize_for_log(payload)
     if response is not None:
         record["response"] = _serialize_for_log(response)
+    _emit_pretty_router_log(event, record)
+    local_llm_logger.info(json.dumps(record, ensure_ascii=False, default=str, separators=(",", ":")))
+
+
+def _log_api_traffic(
+    event: str,
+    *,
+    source: str,
+    path: str,
+    payload: Optional[Any] = None,
+    response: Optional[Any] = None,
+    status_code: Optional[int] = None,
+    duration_ms: Optional[int] = None,
+    stream: Optional[bool] = None,
+    meta: Optional[dict[str, Any]] = None,
+) -> None:
+    if local_llm_logger.disabled:
+        return
+
+    record = {
+        "ts": _utc_now_iso(),
+        "request_id": _request_id_ctx.get(),
+        "session_id": _session_id_ctx.get(),
+        "event": event,
+        "source": source,
+        "path": path,
+        "status_code": status_code,
+        "duration_ms": duration_ms,
+        "stream": stream,
+    }
+    if payload is not None:
+        record["payload"] = _serialize_for_log(payload)
+    if response is not None:
+        record["response"] = _serialize_for_log(response)
+    if meta:
+        record["meta"] = _serialize_for_log(meta)
+    _emit_pretty_router_log(event, record)
     local_llm_logger.info(json.dumps(record, ensure_ascii=False, default=str, separators=(",", ":")))
 
 

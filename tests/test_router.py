@@ -21,7 +21,7 @@ from llmrouter.app import (
     normalize_anthropic_messages,
     normalize_openai_chat,
 )
-from llmrouter.shared import _log_local_llm_traffic
+from llmrouter.shared import _log_api_traffic, _log_local_llm_traffic
 from llmrouter.services import AnalyticsStore, ConfigStore
 
 
@@ -1431,6 +1431,80 @@ def test_anthropic_stream_retries_large_when_small_stream_is_semantically_empty(
     assert resp.headers["x-router-fallback"] == "1"
 
 
+def test_anthropic_commit_request_disables_upstream_stream_even_when_client_requested_stream(cfg_file: Path) -> None:
+    lm_client = CapturePayloadLMClient()
+    app = create_app(config_path=cfg_file, lm_client=lm_client)
+    client = TestClient(app)
+    payload = {
+        "model": "borg-cpu",
+        "stream": True,
+        "max_tokens": 120,
+        "system": "Please generate a concise git commit message from the diff.",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Diff:\n- old\n+ new\nPlease answer only with the commit message.",
+                    }
+                ],
+            }
+        ],
+    }
+
+    resp = client.post("/v1/messages", json=payload)
+
+    assert resp.status_code == 200
+    assert lm_client.last_payload is not None
+    assert lm_client.last_payload["stream"] is False
+
+
+def test_anthropic_wrapper_context_with_commit_hint_does_not_trigger_commit_mode(cfg_file: Path) -> None:
+    lm_client = CapturePayloadLMClient()
+    app = create_app(config_path=cfg_file, lm_client=lm_client)
+    client = TestClient(app)
+    payload = {
+        "model": "borg-cpu",
+        "stream": True,
+        "max_tokens": 128000,
+        "system": [
+            {
+                "type": "text",
+                "text": (
+                    "Session rules: when asked, you may generate a git commit message from a diff. "
+                    "This is only background context."
+                ),
+            }
+        ],
+        "tools": [
+            {
+                "name": "mcp__atlassian__searchJiraIssuesUsingJql",
+                "description": "Search Jira issues",
+                "input_schema": {"type": "object", "properties": {"jql": {"type": "string"}}},
+            }
+        ],
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Kannst du mir meine Jira-Tickets im Sprint anzeigen?",
+                    }
+                ],
+            }
+        ],
+    }
+
+    resp = client.post("/v1/messages", json=payload)
+
+    assert resp.status_code == 200
+    assert lm_client.last_payload is not None
+    assert lm_client.last_payload["stream"] is True
+    assert lm_client.last_payload["max_tokens"] == 128000
+
+
 def test_openai_provider_headers_include_auth_and_optional_org_project() -> None:
     settings = LMStudioSettings(
         provider="openai",
@@ -1574,6 +1648,7 @@ def test_lmstudio_thinking_flags_are_explicitly_enabled_and_disabled() -> None:
 
 def test_local_llm_traffic_log_is_structured_json(monkeypatch: pytest.MonkeyPatch) -> None:
     records: list[dict[str, object]] = []
+    pretty_messages: list[str] = []
 
     class FakeLogger:
         disabled = False
@@ -1581,7 +1656,12 @@ def test_local_llm_traffic_log_is_structured_json(monkeypatch: pytest.MonkeyPatc
         def info(self, message: str) -> None:
             records.append(json.loads(message))
 
+    class FakeAppLogger:
+        def info(self, message: str, *args: object) -> None:
+            pretty_messages.append(message % args if args else message)
+
     monkeypatch.setattr("llmrouter.shared.local_llm_logger", FakeLogger())
+    monkeypatch.setattr("llmrouter.shared.logger", FakeAppLogger())
     _log_local_llm_traffic(
         "request_json",
         provider="lm_studio",
@@ -1598,6 +1678,77 @@ def test_local_llm_traffic_log_is_structured_json(monkeypatch: pytest.MonkeyPatc
     assert records[0]["requested_path"] == "/v1/chat/completions"
     assert records[0]["actual_path"] == "/api/v1/chat"
     assert records[0]["payload"]["messages"][0]["content"] == "hello"
+    assert pretty_messages
+    assert pretty_messages[0].startswith("request_json_pretty\n{")
+    assert '  "event": "request_json"' in pretty_messages[0]
+    assert '  "content": "hello"' in pretty_messages[0]
+
+
+def test_api_traffic_log_is_structured_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    records: list[dict[str, object]] = []
+    pretty_messages: list[str] = []
+
+    class FakeLogger:
+        disabled = False
+
+        def info(self, message: str) -> None:
+            records.append(json.loads(message))
+
+    class FakeAppLogger:
+        def info(self, message: str, *args: object) -> None:
+            pretty_messages.append(message % args if args else message)
+
+    monkeypatch.setattr("llmrouter.shared.local_llm_logger", FakeLogger())
+    monkeypatch.setattr("llmrouter.shared.logger", FakeAppLogger())
+    _log_api_traffic(
+        "client_request",
+        source="openai_chat",
+        path="/v1/chat/completions",
+        payload={"messages": [{"role": "user", "content": "hallo"}]},
+        stream=True,
+        meta={"selected_alias": "small"},
+    )
+
+    assert records
+    assert records[0]["event"] == "client_request"
+    assert records[0]["source"] == "openai_chat"
+    assert records[0]["path"] == "/v1/chat/completions"
+    assert records[0]["payload"]["messages"][0]["content"] == "hallo"
+    assert records[0]["stream"] is True
+    assert pretty_messages
+    assert pretty_messages[0].startswith("client_request_pretty\n{")
+    assert '  "selected_alias": "small"' in pretty_messages[0]
+    assert '  "content": "hallo"' in pretty_messages[0]
+
+
+@pytest.mark.asyncio
+async def test_lightweight_greeting_with_tool_wrapper_prefers_small(cfg_file: Path) -> None:
+    lm = CapturePayloadLMClient()
+    app = create_app(config_path=cfg_file, lm_client=lm)
+    service = app.state.router_service
+
+    decision, alias, used_fallback, result = await service.handle_openai_chat(
+        {
+            "messages": [{"role": "user", "content": "hallo"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "list_files",
+                        "description": "List files",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ],
+            "max_tokens": 4096,
+        }
+    )
+
+    assert alias == "small"
+    assert decision.selected_alias == "small"
+    assert decision.reason in {"lightweight_tool_scaffold_prefer_small", "lightweight_greeting_prefer_small"}
+    assert used_fallback is False
+    assert result["choices"][0]["message"]["content"] == "response-from-qwen/qwen3-vl-8b"
 
 
 @pytest.mark.asyncio

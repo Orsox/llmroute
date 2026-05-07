@@ -228,8 +228,6 @@ def normalize_anthropic_messages(payload: dict[str, Any], *, session_id: str = "
     is_commit_task = bool(
         COMMIT_MESSAGE_TASK_RE.search(routing_latest_user_prompt_text or "")
         or COMMIT_MESSAGE_TASK_RE.search(routing_user_prompt_text or "")
-        or COMMIT_MESSAGE_TASK_RE.search(routing_prompt_text or "")
-        or COMMIT_MESSAGE_TASK_RE.search(prompt_text or "")
     )
     stream = bool(payload.get("stream"))
     if is_commit_task:
@@ -293,6 +291,7 @@ class RouteDecision:
     routing_prompt_text: str = ""
     routing_user_prompt_text: str = ""
     routing_latest_user_prompt_text: str = ""
+    task_type: str = "simple"
     expected_route_class: str = "small"
     routing_efficiency_label: str = "good_fit"
     routing_efficiency_score: int = 100

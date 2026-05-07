@@ -40,6 +40,8 @@ class HeuristicSettings(BaseModel):
     judge_prompt_context_chars: int = 6000
     lightweight_max_tokens_cap: int = 768
     suspect_default_max_tokens_threshold: int = 8192
+    gemma_safe_limit: int = 60000
+    qwen_safe_limit: int = 240000
 
 
 class RepetitionEscalationSettings(BaseModel):
@@ -250,22 +252,22 @@ def _default_config() -> dict[str, Any]:
         "models": {
             "small": {
                 "enabled": True,
-                "model_id": "qwen/qwen3-vl-8b",
-                "context_window": 32996,
-                "capabilities": ["chat", "completions", "vision", "tooluse"],
+                "model_id": "google/gemma-4-e4b",
+                "context_window": 64000,
+                "capabilities": ["chat", "completions", "vision", "tooluse", "coding"],
                 "upstream_ref": "local",
-                "supports_thinking": True,
+                "supports_thinking": False,
                 "relative_speed": 3.0,
-                "suitable_for": "Fast routing judge, low latency chat, multimodal light tasks.",
+                "suitable_for": "Fast routing judge, low latency chat, multimodal light tasks, coding task on medium level.",
             },
             "large": {
                 "enabled": True,
-                "model_id": "qwen/qwen3.5-35b-a3b",
-                "context_window": 262144,
-                "capabilities": ["chat", "completions", "tooluse"],
+                "model_id": "qwen/qwen3.6-27b",
+                "context_window": 254000,
+                "capabilities": ["chat", "completions", "tooluse", "thinking"],
                 "upstream_ref": "local",
-                "supports_thinking": False,
-                "relative_speed": 1.0,
+                "supports_thinking": True,
+                "relative_speed": 2.0,
                 "suitable_for": "Higher complexity reasoning and long-context workloads.",
             },
             "deep": {

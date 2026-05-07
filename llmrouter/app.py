@@ -36,6 +36,12 @@ from .settings import (
     WindowsStartupToggleRequest,
 )
 from .shared import (
+    _clip_for_log,
+    _current_request_latency_ms,
+    _extract_assistant_text,
+    _extract_openai_tool_call_count,
+    _log_api_traffic,
+    _log_text_max_chars,
     DEFAULT_TOOLUSE_SYSTEM_HINT,
     _payload_summary,
     _request_id_ctx,
@@ -100,6 +106,24 @@ def create_app(
     app_instance.state.router_service = service
     app_instance.state.analytics_store = analytics_store
     app_instance.state.model_availability_monitor = monitor
+
+    async def _log_streaming_response(stream, *, source: str, path: str, alias: str, used_fallback: bool):
+        raw_chunks: list[str] = []
+        async for chunk in stream:
+            if chunk:
+                if len("".join(raw_chunks)) < _log_text_max_chars():
+                    raw_chunks.append(chunk.decode("utf-8", errors="replace"))
+            yield chunk
+        _log_api_traffic(
+            "client_response",
+            source=source,
+            path=path,
+            response={"raw_sse_excerpt": _clip_for_log("".join(raw_chunks), _log_text_max_chars())},
+            status_code=200,
+            duration_ms=_current_request_latency_ms(),
+            stream=True,
+            meta={"selected_alias": alias, "used_fallback": used_fallback},
+        )
 
     @app_instance.middleware('http')
     async def request_logging_middleware(request: Request, call_next):
@@ -188,6 +212,7 @@ def create_app(
         await require_auth(request)
         payload = await request.json()
         logger.info('request_payload source=openai_chat %s', _payload_summary(payload))
+        _log_api_traffic("client_request", source="openai_chat", path=request.url.path, payload=payload, stream=bool(payload.get("stream")))
         if _thinking_debug_enabled():
             logger.info('thinking_debug_request source=openai_chat probe=%s', _thinking_payload_probe(payload))
         decision, alias, used_fallback, result = await service.handle_openai_chat(
@@ -198,8 +223,33 @@ def create_app(
         headers = _route_headers(cfg, decision, alias, used_fallback)
         _log_route_analytics(cfg, decision, alias, used_fallback)
         if isinstance(result, dict):
+            _log_api_traffic(
+                "client_response",
+                source="openai_chat",
+                path=request.url.path,
+                response=result,
+                status_code=200,
+                duration_ms=_current_request_latency_ms(),
+                stream=False,
+                meta={
+                    "selected_alias": alias,
+                    "used_fallback": used_fallback,
+                    "output_text": _extract_assistant_text(result),
+                    "tool_calls": _extract_openai_tool_call_count(result),
+                },
+            )
             return JSONResponse(result, headers=headers)
-        return StreamingResponse(result, media_type='text/event-stream', headers=headers)
+        return StreamingResponse(
+            _log_streaming_response(
+                result,
+                source="openai_chat",
+                path=request.url.path,
+                alias=alias,
+                used_fallback=used_fallback,
+            ),
+            media_type='text/event-stream',
+            headers=headers,
+        )
 
     @app_instance.post('/v1/completions')
     @app_instance.post('/completions')
@@ -207,6 +257,7 @@ def create_app(
         await require_auth(request)
         payload = await request.json()
         logger.info('request_payload source=openai_completions %s', _payload_summary(payload))
+        _log_api_traffic("client_request", source="openai_completions", path=request.url.path, payload=payload, stream=bool(payload.get("stream")))
         decision, alias, used_fallback, result = await service.handle_openai_completions(
             payload,
             session_id=getattr(request.state, "session_id", ""),
@@ -215,14 +266,35 @@ def create_app(
         headers = _route_headers(cfg, decision, alias, used_fallback)
         _log_route_analytics(cfg, decision, alias, used_fallback)
         if isinstance(result, dict):
+            _log_api_traffic(
+                "client_response",
+                source="openai_completions",
+                path=request.url.path,
+                response=result,
+                status_code=200,
+                duration_ms=_current_request_latency_ms(),
+                stream=False,
+                meta={"selected_alias": alias, "used_fallback": used_fallback},
+            )
             return JSONResponse(result, headers=headers)
-        return StreamingResponse(result, media_type='text/event-stream', headers=headers)
+        return StreamingResponse(
+            _log_streaming_response(
+                result,
+                source="openai_completions",
+                path=request.url.path,
+                alias=alias,
+                used_fallback=used_fallback,
+            ),
+            media_type='text/event-stream',
+            headers=headers,
+        )
 
     @app_instance.post('/v1/messages')
     async def post_anthropic_messages(request: Request):
         await require_auth(request)
         payload = await request.json()
         logger.info('request_payload source=anthropic_messages %s', _payload_summary(payload))
+        _log_api_traffic("client_request", source="anthropic_messages", path=request.url.path, payload=payload, stream=bool(payload.get("stream")))
         if _thinking_debug_enabled():
             logger.info('thinking_debug_request source=anthropic_messages probe=%s', _thinking_payload_probe(payload))
         decision, alias, used_fallback, is_stream, result = await service.handle_anthropic_messages(
@@ -233,7 +305,27 @@ def create_app(
         headers = _route_headers(cfg, decision, alias, used_fallback)
         _log_route_analytics(cfg, decision, alias, used_fallback)
         if is_stream:
-            return StreamingResponse(result, media_type='text/event-stream', headers=headers)
+            return StreamingResponse(
+                _log_streaming_response(
+                    result,
+                    source="anthropic_messages",
+                    path=request.url.path,
+                    alias=alias,
+                    used_fallback=used_fallback,
+                ),
+                media_type='text/event-stream',
+                headers=headers,
+            )
+        _log_api_traffic(
+            "client_response",
+            source="anthropic_messages",
+            path=request.url.path,
+            response=result,
+            status_code=200,
+            duration_ms=_current_request_latency_ms(),
+            stream=False,
+            meta={"selected_alias": alias, "used_fallback": used_fallback},
+        )
         return JSONResponse(result, headers=headers)
 
     @app_instance.get('/admin', response_class=HTMLResponse)

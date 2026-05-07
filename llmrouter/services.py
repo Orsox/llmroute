@@ -2436,6 +2436,7 @@ class RouterService:
         thinking_requested: bool,
         judge_model_id: Optional[str],
         is_coding: bool,
+        task_type: str = "simple",
     ) -> RouteDecision:
         escalated_alias, escalation_source, repetition_streak, similarity = self._find_repetition_escalation_alias(
             cfg,
@@ -2456,7 +2457,7 @@ class RouterService:
             )
             selected_alias = escalated_alias
             reason = f"repetition_escalation_{decision_source}_to_{selected_alias}"
-            thinking_requested = self._heuristic_thinking_requested(cfg, req, selected_alias)
+            thinking_requested = self._heuristic_thinking_requested(cfg, req, selected_alias, task_type)
 
         if req.needs_tooluse or self._is_no_thinking_task(req):
             thinking_requested = False
@@ -2471,6 +2472,7 @@ class RouterService:
             thinking_requested=thinking_requested,
             judge_model_id=judge_model_id,
             is_coding=is_coding,
+            task_type=task_type,
         )
         session_id = self._effective_session_id(cfg, req)
         if session_id:
@@ -2504,6 +2506,7 @@ class RouterService:
         thinking_requested: bool,
         judge_model_id: Optional[str],
         is_coding: bool,
+        task_type: str = "simple",
     ) -> RouteDecision:
         prompt_log_max_chars = max(200, int(os.getenv("ROUTER_PROMPT_LOG_MAX_CHARS", "4000")))
         expected_route_class = self._expected_route_class(req, is_coding)
@@ -2523,6 +2526,7 @@ class RouterService:
             is_commit_message_task=req.is_commit_message_task,
             judge_model_id=judge_model_id,
             is_coding_request=is_coding,
+            task_type=task_type,
             source_api=req.source_api,
             requested_model=req.requested_model,
             stream=req.stream,
@@ -2829,6 +2833,36 @@ class RouterService:
         return bool(CODING_TOPIC_RE.search(text))
 
     @staticmethod
+    def _classify_task_type(req: UnifiedRequest, is_coding: bool) -> str:
+        text = (
+            req.routing_latest_user_prompt_text
+            or req.routing_user_prompt_text
+            or req.routing_prompt_text
+            or req.latest_user_prompt_text
+            or req.user_prompt_text
+            or req.prompt_text
+            or ""
+        ).strip()
+        
+        if not text:
+            return "simple"
+            
+        if DEBUG_TASK_RE.search(text):
+            return "debug"
+        if ARCHITECTURE_TASK_RE.search(text):
+            return "architecture"
+        if AGENT_TASK_RE.search(text):
+            return "agent"
+        if COMPLEX_CODE_TASK_RE.search(text):
+            return "complex_code"
+        if is_coding:
+            return "code"
+        if BOILERPLATE_TASK_RE.search(text):
+            return "simple"  # Boilerplate/Formatting gilt als simple laut Anforderung
+        
+        return "simple"
+
+    @staticmethod
     def _is_file_search_request(req: UnifiedRequest) -> bool:
         text = (
             req.routing_latest_user_prompt_text
@@ -2878,13 +2912,23 @@ class RouterService:
         cfg: RouterConfig,
         req: UnifiedRequest,
         selected_alias: str,
+        task_type: str,
     ) -> bool:
-        if req.needs_tooluse or self._is_no_thinking_task(req) or req.is_commit_message_task:
+        profile = cfg.models.get(selected_alias)
+        if not profile or not profile.supports_thinking:
             return False
-        profile = cfg.models[selected_alias]
-        if not profile.supports_thinking:
-            return False
-        return self._is_deep_reasoning_request(req)
+            
+        # Thinking standardmäßig AUS.
+        # Thinking nur aktivieren bei: Debugging, Architekturentscheidungen, komplexem Refactoring,
+        # Root-Cause-Analyse, agentischen Planungsaufgaben, sehr großen Kontexten.
+        
+        if task_type in ("debug", "architecture", "complex_code", "agent"):
+            return True
+            
+        if req.routing_estimated_total_tokens > 60000 and task_type != "simple":
+            return True
+            
+        return False
 
     async def _judge_alias(
         self,
@@ -3126,6 +3170,7 @@ class RouterService:
 
     async def choose_route(self, cfg: RouterConfig, req: UnifiedRequest) -> RouteDecision:
         is_coding = self._is_coding_request(req)
+        task_type = self._classify_task_type(req, is_coding)
         self._apply_routing_budget(cfg, req, is_coding)
         candidates = self._eligible_aliases(cfg, req)
         is_commit_task = req.is_commit_message_task
@@ -3155,225 +3200,100 @@ class RouterService:
                         thinking_requested=bool(entry.get("thinking_requested")),
                         judge_model_id=entry.get("judge_model_id"),
                         is_coding=is_coding,
+                        task_type=task_type,
                     )
 
         is_first_request = not recent_entries
-
-        small_coding_context_limit = self._small_coding_context_limit_tokens()
-        small_coding_task_limit = self._small_coding_task_limit_tokens()
-        if is_coding and "small" in candidates and req.routing_estimated_total_tokens > small_coding_context_limit:
-            candidates = [alias for alias in candidates if alias != "small"]
-            logger.info(
-                "route_eval_filter_small_coding_context est_total_tokens=%s limit=%s",
-                req.routing_estimated_total_tokens,
-                small_coding_context_limit,
-            )
-        logger.info(
-            "route_eval_start source=%s requested_model=%r stream=%s required_caps=%s candidates=%s routing_total_tokens=%s full_total_tokens=%s is_coding=%s",
-            req.source_api,
-            req.requested_model,
-            req.stream,
-            sorted(req.required_capabilities),
-            candidates,
-            req.routing_estimated_total_tokens,
-            req.full_estimated_total_tokens,
-            is_coding,
-        )
-        if _thinking_debug_enabled():
-            logger.info(
-                "thinking_debug_route_flags source=%s commit_task=%s no_thinking_task=%s file_search=%s needs_tooluse=%s",
-                req.source_api,
-                int(is_commit_task),
-                int(is_no_thinking_task),
-                int(is_file_search),
-                int(req.needs_tooluse),
-            )
+        total_tokens = req.routing_estimated_total_tokens
 
         if not candidates:
             if not self._has_available_primary_alias(cfg) and cfg.is_alias_enabled("backup"):
-                logger.warning(
-                    "route_eval_no_primary_available_using_backup required_caps=%s est_total_tokens=%s",
-                    sorted(req.required_capabilities),
-                    req.routing_estimated_total_tokens,
-                )
                 selected = "backup"
+                reason = "no_primary_available_fallback_to_backup"
+                thinking_requested = self._heuristic_thinking_requested(cfg, req, selected, task_type)
                 decision = self._build_decision(
                     cfg,
                     req,
                     selected_alias=selected,
-                    reason="no_primary_available_fallback_to_backup",
+                    reason=reason,
                     candidates=[selected],
-                    thinking_requested=self._heuristic_thinking_requested(cfg, req, selected),
-                    judge_model_id=cfg.models["small"].model_id,
+                    thinking_requested=thinking_requested,
+                    judge_model_id=cfg.models["small"].model_id if "small" in cfg.models else None,
                     is_coding=is_coding,
+                    task_type=task_type,
                 )
-                logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
+                logger.info("routing_decision selected_model=%s task_type=%s total_estimated_tokens=%s thinking_enabled=%s routing_reason=%s",
+                            decision.selected_alias, decision.task_type, decision.routing_estimated_total_tokens, decision.thinking_requested, decision.reason)
                 return decision
-            logger.warning(
-                "route_eval_no_candidates_without_backup required_caps=%s est_total_tokens=%s",
-                sorted(req.required_capabilities),
-                req.routing_estimated_total_tokens,
-            )
             raise HTTPException(status_code=503, detail="No eligible primary model available for this request")
 
-        preferred_alias = None
-        if not self._is_router_public_model_name(cfg, req.requested_model):
-            preferred_alias = self._find_alias_by_model_id(cfg, req.requested_model)
-
-        is_web = WEBSEARCH_RE.search(req.routing_user_prompt_text or "") is not None
-        is_deep = (self._is_deep_reasoning_request(req) or is_web) and self._is_deep_enabled(cfg)
-        small_shortcut_reason = self._prefer_small_shortcut(cfg, req, is_coding)
-
-        if small_shortcut_reason and "small" in candidates:
-            decision = self._build_decision(
-                cfg,
-                req,
-                selected_alias="small",
-                reason=small_shortcut_reason,
-                candidates=candidates,
-                thinking_requested=False,
-                judge_model_id=cfg.models["small"].model_id,
-                is_coding=is_coding,
-            )
-            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
-            return decision
-
-        if len(candidates) == 1:
-            selected = candidates[0]
-            decision = self._build_decision(
-                cfg,
-                req,
-                selected_alias=selected,
-                reason="constraint_single_candidate",
-                candidates=candidates,
-                thinking_requested=self._heuristic_thinking_requested(cfg, req, selected),
-                judge_model_id=cfg.models["small"].model_id,
-                is_coding=is_coding,
-            )
-            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
-            return decision
-
-        if "large" not in candidates and "small" in candidates and "deep" in candidates:
-            # Policy: if large is unavailable, start on small first.
-            # Repetition escalation may still move small -> deep on loop risk.
+        # 2. Model selection logic
+        selected = "small"
+        reason = "default_gemma"
+        shortcut_reason = self._prefer_small_shortcut(cfg, req, is_coding)
+        if shortcut_reason and "small" in candidates:
             selected = "small"
-            decision = self._build_decision(
-                cfg,
-                req,
-                selected_alias=selected,
-                reason="policy_large_unavailable_prefer_small",
-                candidates=candidates,
-                thinking_requested=self._heuristic_thinking_requested(cfg, req, selected),
-                judge_model_id=cfg.models["small"].model_id,
-                is_coding=is_coding,
-            )
-            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
-            return decision
-
-        if (is_deep or is_web) and "deep" in candidates:
-            selected = "deep"
-            reason = "policy_deep_reasoning_or_websearch"
-            decision = self._build_decision(
-                cfg,
-                req,
-                selected_alias=selected,
-                reason=reason,
-                candidates=candidates,
-                thinking_requested=self._heuristic_thinking_requested(cfg, req, selected),
-                judge_model_id=cfg.models["small"].model_id,
-                is_coding=is_coding,
-            )
-            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
-            return decision
-
-        judge_alias, judge_thinking_requested = await self._judge_alias(
-            cfg,
-            req,
-            candidates,
-            is_deep_reasoning=is_deep,
-            is_websearch=is_web,
-            is_commit_task=is_commit_task,
-            is_file_search=is_file_search,
-        )
-        if judge_alias and judge_alias in candidates:
-            selected = judge_alias
-            reason = f"judge_{judge_alias}"
-            if not is_coding and "small" in candidates and selected == "large":
+            reason = shortcut_reason
+        
+        # Policy rules
+        if reason == "default_gemma" and total_tokens > cfg.routing.heuristics.qwen_safe_limit:
+            if "deep" in candidates:
+                selected = "deep"
+                reason = "context_exceeds_qwen_safe_limit"
+            else:
+                logger.warning("route_eval_limit_exceeded total_tokens=%s limit=%s", total_tokens, cfg.routing.heuristics.qwen_safe_limit)
+                selected = "large" 
+                reason = "context_exceeds_qwen_safe_limit_trying_large"
+        elif reason == "default_gemma" and total_tokens > cfg.routing.heuristics.gemma_safe_limit:
+            selected = "large"
+            reason = "context_exceeds_gemma_safe_limit"
+        elif reason == "default_gemma" and task_type in ("debug", "architecture", "complex_code", "agent"):
+            selected = "large"
+            reason = f"complex_task_{task_type}"
+        
+        # 3. Validation and fallback within candidates
+        if selected not in candidates:
+            if "large" in candidates:
+                selected = "large"
+                reason = f"fallback_to_large_from_{selected}"
+            elif "small" in candidates:
                 selected = "small"
-                reason = "judge_policy_non_coding_small"
+                reason = f"fallback_to_small_from_{selected}"
+            elif "deep" in candidates:
+                selected = "deep"
+                reason = f"fallback_to_deep_from_{selected}"
+            else:
+                selected = candidates[0]
+                reason = "fallback_to_first_available"
 
-            preferred = self._preferred_alias_for_request(cfg, req, candidates, preferred_alias, is_coding)
-            if preferred:
-                selected = preferred
-                reason = "client_model_preference"
-
-            thinking_requested = (
-                judge_thinking_requested
-                if judge_thinking_requested is not None
-                else self._heuristic_thinking_requested(cfg, req, selected)
-            )
-            if req.needs_tooluse or self._is_no_thinking_task(req):
-                thinking_requested = False
-            if thinking_requested and not cfg.models[selected].supports_thinking:
-                thinking_requested = False
-
-            decision = self._build_decision(
-                cfg,
-                req,
-                selected_alias=selected,
-                reason=reason,
-                candidates=candidates,
-                thinking_requested=thinking_requested,
-                judge_model_id=cfg.models["small"].model_id,
-                is_coding=is_coding,
-            )
-            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
-            return decision
-
-        preferred_when_judge_unavailable = self._preferred_alias_for_request(
-            cfg, req, candidates, preferred_alias, is_coding
-        )
-        if preferred_when_judge_unavailable:
-            decision = self._build_decision(
-                cfg,
-                req,
-                selected_alias=preferred_when_judge_unavailable,
-                reason="client_model_preference_judge_unavailable",
-                candidates=candidates,
-                thinking_requested=self._heuristic_thinking_requested(cfg, req, preferred_when_judge_unavailable),
-                judge_model_id=cfg.models["small"].model_id,
-                is_coding=is_coding,
-            )
-            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
-            return decision
-
-        if "small" in candidates:
-            decision = self._build_decision(
-                cfg,
-                req,
-                selected_alias="small",
-                reason="judge_unavailable_default_small",
-                candidates=candidates,
-                thinking_requested=self._heuristic_thinking_requested(cfg, req, "small"),
-                judge_model_id=cfg.models["small"].model_id,
-                is_coding=is_coding,
-            )
-            logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
-            return decision
-
-        heur_alias = self._heuristic_alias(cfg, req, candidates)
+        # 4. Thinking decision
+        thinking_requested = self._heuristic_thinking_requested(cfg, req, selected, task_type)
+        
+        # 5. Build decision
         decision = self._build_decision(
             cfg,
             req,
-            selected_alias=heur_alias,
-            reason="heuristic_fallback",
+            selected_alias=selected,
+            reason=reason,
             candidates=candidates,
-            thinking_requested=self._heuristic_thinking_requested(cfg, req, heur_alias),
-            judge_model_id=cfg.models["small"].model_id,
+            thinking_requested=thinking_requested,
+            judge_model_id=cfg.models["small"].model_id if "small" in cfg.models else None,
             is_coding=is_coding,
+            task_type=task_type,
         )
-        logger.info("route_eval_decision selected=%s reason=%s", decision.selected_alias, decision.reason)
+        
+        # 6. Logging
+        logger.info(
+            "routing_decision selected_model=%s task_type=%s total_estimated_tokens=%s thinking_enabled=%s routing_reason=%s",
+            decision.selected_alias,
+            decision.task_type,
+            decision.routing_estimated_total_tokens,
+            decision.thinking_requested,
+            decision.reason
+        )
+        
         return decision
+
 
     @staticmethod
     def _attempt_order(cfg: RouterConfig, decision: RouteDecision) -> list[str]:
@@ -3944,6 +3864,7 @@ class RouterService:
         decision = await self.choose_route(cfg, req)
 
         openai_payload = anthropic_to_openai_payload(payload)
+        openai_payload["stream"] = req.stream
         openai_payload["model"] = cfg.models[decision.selected_alias].model_id
 
         if req.stream:
