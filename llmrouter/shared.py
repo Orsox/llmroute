@@ -151,6 +151,32 @@ FILE_SEARCH_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+FILESYSTEM_SMALL_OPERATION_RE = re.compile(
+    r"\b("
+    r"read_file|read file|open file|show file|cat |sed |single_file_question|small_patch|"
+    r"explain_function|explain function|grep|ripgrep|rg|glob|find file|find files|"
+    r"datei lesen|datei anzeigen|funktion erkl[aä]ren|kleiner patch|kleine [aä]nderung"
+    r")\b",
+    re.IGNORECASE,
+)
+FILESYSTEM_REPO_WIDE_RE = re.compile(
+    r"\b("
+    r"repo[- ]?wide|repository[- ]?wide|whole repo|entire repo|codebase|"
+    r"projektweit|gesamtes projekt|alle dateien|across files|überall|ueberall"
+    r")\b",
+    re.IGNORECASE,
+)
+FILESYSTEM_SAFETY_CRITICAL_RE = re.compile(
+    r"\b("
+    r"safety[- ]?critical|security[- ]?critical|sicherheitskritisch|security|auth|"
+    r"authentication|authorization|crypto|verschlüsselung|encryption|permissions|berechtigungen"
+    r")\b",
+    re.IGNORECASE,
+)
+FILESYSTEM_FILE_REF_RE = re.compile(
+    r"(?:^|[\s'\"`(])(?:[\w.-]+/)+[\w.-]+|\b[\w.-]+\.(?:py|js|ts|tsx|jsx|java|kt|rs|go|c|cpp|h|hpp|md|txt|yaml|yml|json|toml|ini|cfg|xml|html|css|scss|sql)\b",
+    re.IGNORECASE,
+)
 COMMIT_MESSAGE_TASK_RE = re.compile(
     r"\b("
     r"commit message|git commit|commit-msg|conventional commit|"

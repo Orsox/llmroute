@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from .shared import *
 from .settings import *
 
@@ -983,12 +985,13 @@ def _build_tray_icon(is_running: bool):
         return None
 
     size = 64
-    asset_path = _project_root() / "assets" / "llmrouter_route_icon.png"
+    asset_candidates = _tray_icon_asset_candidates(is_running)
     indicator = "#22c55e" if is_running else "#ef4444"
 
     try:
-        if asset_path.exists():
-            image = Image.open(asset_path).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+        asset_path = next((candidate for candidate in asset_candidates if candidate.exists()), None)
+        if asset_path is not None:
+            image = _prepare_tray_asset_image(asset_path, size)
         else:
             image = Image.new("RGBA", (size, size), "#0b1220")
             draw = ImageDraw.Draw(image)
@@ -999,8 +1002,9 @@ def _build_tray_icon(is_running: bool):
             for px, py in [(14, 46), (37, 34), (50, 18)]:
                 draw.ellipse((px - 4, py - 4, px + 4, py + 4), fill="#f8fafc", outline="#0ea5e9", width=1)
 
-        draw = ImageDraw.Draw(image)
-        draw.ellipse((45, 45, 61, 61), fill=indicator, outline="#ffffff", width=2)
+        if asset_path is None:
+            draw = ImageDraw.Draw(image)
+            draw.ellipse((45, 45, 61, 61), fill=indicator, outline="#ffffff", width=2)
         return image
     except Exception as exc:
         logger.exception("Failed to build tray icon: %s", exc)
@@ -1008,16 +1012,216 @@ def _build_tray_icon(is_running: bool):
         return Image.new("RGBA", (size, size), indicator)
 
 
+def _tray_icon_asset_candidates(is_running: bool) -> list[Path]:
+    assets_dir = _project_root() / "assets"
+    return [
+        assets_dir / ("llmrouter_route_icon_running.png" if is_running else "llmrouter_route_icon_stopped.png"),
+        assets_dir / "llmrouter_route_icon.png",
+    ]
+
+
+def _prepare_tray_asset_image(asset_path: Path, size: int):
+    from PIL import Image
+
+    image = Image.open(asset_path).convert("RGBA")
+    alpha_min, alpha_max = image.getchannel("A").getextrema()
+    if alpha_min == alpha_max == 255:
+        image = _with_corner_background_transparency(image)
+
+    content_bbox = image.getchannel("A").getbbox()
+    if content_bbox is not None:
+        image = image.crop(content_bbox)
+
+    target_size = max(size - 8, 1)
+    image.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
+
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    offset = ((size - image.width) // 2, (size - image.height) // 2)
+    canvas.alpha_composite(image, offset)
+    return canvas
+
+
+def _with_corner_background_transparency(image):
+    from collections import deque
+
+    width, height = image.size
+    background = image.getpixel((0, 0))
+    if any(image.getpixel(point) != background for point in ((width - 1, 0), (0, height - 1), (width - 1, height - 1))):
+        return image
+
+    source = image.load()
+    converted = image.copy()
+    target = converted.load()
+
+    queue = deque()
+    seen = set()
+    for x in range(width):
+        queue.append((x, 0))
+        queue.append((x, height - 1))
+    for y in range(height):
+        queue.append((0, y))
+        queue.append((width - 1, y))
+
+    while queue:
+        x, y = queue.popleft()
+        if (x, y) in seen:
+            continue
+        seen.add((x, y))
+        if source[x, y] != background:
+            continue
+
+        r, g, b, _ = source[x, y]
+        target[x, y] = (r, g, b, 0)
+        if x > 0:
+            queue.append((x - 1, y))
+        if x + 1 < width:
+            queue.append((x + 1, y))
+        if y > 0:
+            queue.append((x, y - 1))
+        if y + 1 < height:
+            queue.append((x, y + 1))
+    return converted
+
+
+def _should_force_linux_gtk_backend() -> bool:
+    if not sys.platform.startswith("linux"):
+        return False
+    if os.environ.get("PYSTRAY_BACKEND"):
+        return False
+    try:
+        __import__("gi")
+    except ImportError:
+        logger.warning(
+            "Linux tray: GTK backend not forced because PyGObject/gi is unavailable; "
+            "falling back to pystray default backend"
+        )
+        return False
+    return True
+
+
+def _run_with_qt_tray(app_instance: FastAPI) -> bool:
+    if not sys.platform.startswith("linux"):
+        return False
+
+    try:
+        from PyQt6.QtCore import QTimer
+        from PyQt6.QtGui import QAction, QIcon
+        from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+    except ImportError as exc:
+        logger.info("Linux tray: PyQt6 fallback unavailable: %s", exc)
+        return False
+
+    config_store = app_instance.state.config_store
+    runtime_cfg = config_store.get_config()
+    logger.debug("Qt tray mode config loaded: host=%s port=%s",
+                 runtime_cfg.server.host, runtime_cfg.server.port)
+
+    def current_urls() -> tuple[str, str, str]:
+        runtime_cfg = config_store.get_config()
+        base_url = _admin_base_url(runtime_cfg.server.host, runtime_cfg.server.port)
+        return base_url, f"{base_url}/admin", f"{base_url}/admin/status"
+
+    controller = RouterServerController(app_instance)
+    logger.debug("Starting router server controller for Qt tray")
+    controller.start()
+
+    qt_app = QApplication.instance() or QApplication([])
+    qt_app.setQuitOnLastWindowClosed(False)
+
+    tray_icon = QSystemTrayIcon()
+    tray_icon.setToolTip("LM Router")
+
+    def tray_asset_path() -> Optional[Path]:
+        return next((candidate for candidate in _tray_icon_asset_candidates(controller.is_running()) if candidate.exists()), None)
+
+    def refresh_visuals() -> None:
+        asset_path = tray_asset_path()
+        if asset_path is not None:
+            tray_icon.setIcon(QIcon(str(asset_path)))
+        title = "LM Router (Running)" if controller.is_running() else "LM Router (Stopped)"
+        tray_icon.setToolTip(title)
+
+    def on_open_settings() -> None:
+        base_url, _, _ = current_urls()
+        settings_url = f"{base_url}/settings"
+        logger.debug("Opening settings page at %s", settings_url)
+        webbrowser.open(settings_url, new=2)
+
+    def on_open_health() -> None:
+        _, _, status_url = current_urls()
+        logger.debug("Opening health status in browser")
+        webbrowser.open(status_url, new=2)
+
+    def on_restart() -> None:
+        logger.debug("Reloading config and restarting server from Qt tray")
+        old_cfg = config_store.get_config()
+        controller.stop()
+        try:
+            config_store._config = config_store._load_from_disk()
+            logger.info("tray_restart_config_reloaded")
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("tray_restart_config_reload_failed error=%s", exc)
+            config_store._config = old_cfg
+            controller.last_error = f"Config reload failed: {exc}"
+        controller.start()
+        refresh_visuals()
+
+    def on_quit() -> None:
+        logger.debug("Stopping Qt tray icon and controller")
+        controller.stop()
+        tray_icon.hide()
+        qt_app.quit()
+
+    menu = QMenu()
+    settings_action = QAction("Settings", menu)
+    settings_action.triggered.connect(on_open_settings)
+    menu.addAction(settings_action)
+
+    status_action = QAction("Status", menu)
+    status_action.triggered.connect(on_open_health)
+    menu.addAction(status_action)
+
+    menu.addSeparator()
+
+    restart_action = QAction("Router neu starten", menu)
+    restart_action.triggered.connect(on_restart)
+    menu.addAction(restart_action)
+
+    quit_action = QAction("Beenden", menu)
+    quit_action.triggered.connect(on_quit)
+    menu.addAction(quit_action)
+
+    tray_icon.setContextMenu(menu)
+    refresh_visuals()
+    tray_icon.show()
+
+    refresh_timer = QTimer()
+    refresh_timer.setInterval(2000)
+    refresh_timer.timeout.connect(refresh_visuals)
+    refresh_timer.start()
+
+    logger.info("Linux tray: using Qt system tray backend")
+    qt_app.exec()
+    return True
+
+
 def run_with_tray(app_instance: FastAPI) -> None:
     logger.info("Starting LM Router in tray mode")
+    if _run_with_qt_tray(app_instance):
+        return
+    if _should_force_linux_gtk_backend():
+        os.environ["PYSTRAY_BACKEND"] = "gtk"
+        logger.info("Linux tray: forcing pystray GTK backend to avoid AppIndicator placeholder icons")
     try:
         import pystray
         from PIL import Image  # noqa: F401 - verify pillow is available
     except ImportError as exc:
-        logger.error("Tray mode unavailable: pystray/PIL not installed")
+        logger.error("Tray mode unavailable: %s", exc)
         raise RuntimeError(
-            "Tray mode requires pystray and pillow. "
-            "Install with: pip install -r requirements.txt"
+            "Tray mode could not be initialized. "
+            f"Original import error: {exc}. "
+            "If you use Linux GTK tray mode, install PyGObject/gi as well; "
+            "otherwise verify that pystray and pillow are installed in the active interpreter."
         ) from exc
 
     config_store = app_instance.state.config_store

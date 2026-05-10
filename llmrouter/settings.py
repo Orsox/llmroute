@@ -40,6 +40,11 @@ class HeuristicSettings(BaseModel):
     judge_prompt_context_chars: int = 6000
     lightweight_max_tokens_cap: int = 768
     suspect_default_max_tokens_threshold: int = 8192
+    small_first_output_cap: int = 2048
+    small_first_input_hard_limit: int = 48000
+    tooluse_small_first: bool = True
+    filesystem_small_first: bool = True
+    client_meta_small_first: bool = True
     gemma_safe_limit: int = 60000
     qwen_safe_limit: int = 240000
 

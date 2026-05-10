@@ -2022,8 +2022,7 @@ class RouterService:
 
     @staticmethod
     def _fallback_alias(cfg: RouterConfig, req: UnifiedRequest) -> Optional[str]:
-        is_agentic = RouterService._is_agentic_request(req)
-        preferred = ("large", "deep") if is_agentic else ("large", "deep", "small")
+        preferred = ("small", "large", "deep")
         for alias in preferred:
             if cfg.is_alias_enabled(alias):
                 if alias == "deep" and not RouterService._is_deep_enabled(cfg):
@@ -2082,32 +2081,141 @@ class RouterService:
             return False
         return bool(CLIENT_META_TASK_RE.search(text))
 
-    def _prefer_small_shortcut(self, cfg: RouterConfig, req: UnifiedRequest, is_coding: bool) -> Optional[str]:
-        latest = (
+    @classmethod
+    def _is_local_documentation_request(cls, req: UnifiedRequest) -> bool:
+        text = cls._request_routing_text(req)
+        if not text:
+            return False
+        if not BOILERPLATE_TASK_RE.search(text):
+            return False
+        if cls._is_repo_wide_or_architecture_request(req):
+            return False
+        if cls._is_safety_critical_request(req) or cls._is_deep_reasoning_request(req):
+            return False
+        return bool(req.routing_input_tokens <= 48000)
+
+    @staticmethod
+    def _request_routing_text(req: UnifiedRequest) -> str:
+        return (
             req.routing_latest_user_prompt_text
             or req.routing_user_prompt_text
+            or req.routing_prompt_text
             or req.latest_user_prompt_text
             or req.user_prompt_text
+            or req.prompt_text
             or ""
         ).strip()
-        if not latest or req.needs_vision or req.tool_loop_context:
-            return None
+
+    @classmethod
+    def _is_repo_wide_or_architecture_request(cls, req: UnifiedRequest) -> bool:
+        text = cls._request_routing_text(req)
+        if not text:
+            return False
+        return bool(FILESYSTEM_REPO_WIDE_RE.search(text) or ARCHITECTURE_TASK_RE.search(text))
+
+    @classmethod
+    def _is_safety_critical_request(cls, req: UnifiedRequest) -> bool:
+        text = cls._request_routing_text(req)
+        if not text:
+            return False
+        return bool(FILESYSTEM_SAFETY_CRITICAL_RE.search(text))
+
+    def _routing_profile(self, cfg: RouterConfig, req: UnifiedRequest, is_coding: bool) -> str:
         if self._is_deep_reasoning_request(req):
+            return "deep_required"
+        if self._is_repo_wide_or_architecture_request(req):
+            return "architecture_or_repo_wide"
+        if self._is_local_documentation_request(req):
+            return "documentation_small_first"
+        if cfg.routing.heuristics.filesystem_small_first and self._is_filesystem_small_request(req):
+            return "filesystem_small_first"
+        if cfg.routing.heuristics.tooluse_small_first and req.needs_tooluse and not req.needs_vision and not req.tool_loop_context:
+            return "tooluse_small_first"
+        if cfg.routing.heuristics.client_meta_small_first and self._is_client_meta_request(req):
+            return "client_meta_small_first"
+        if is_coding:
+            return "coding_complex"
+        return "normal_chat"
+
+    @staticmethod
+    def _routing_budget_tokens(cfg: RouterConfig, req: UnifiedRequest, profile: str) -> int:
+        if req.routing_max_tokens_budget is not None:
+            return max(req.routing_input_tokens, req.routing_input_tokens + req.routing_max_tokens_budget)
+
+        if profile in {"tooluse_small_first", "filesystem_small_first", "client_meta_small_first", "documentation_small_first"}:
+            capped_output = min(req.max_tokens or 0, cfg.routing.heuristics.small_first_output_cap)
+            return req.routing_input_tokens + capped_output
+
+        return req.routing_estimated_total_tokens
+
+    @staticmethod
+    def _small_first_reason(profile: str) -> Optional[str]:
+        mapping = {
+            "tooluse_small_first": "tooluse_small_first",
+            "filesystem_small_first": "filesystem_small_first",
+            "client_meta_small_first": "client_meta_small_first",
+            "documentation_small_first": "documentation_small_first",
+        }
+        return mapping.get(profile)
+
+    def _small_first_block_reason(
+        self,
+        cfg: RouterConfig,
+        req: UnifiedRequest,
+        profile: str,
+        routing_budget: int,
+        small_context_limit: int,
+    ) -> Optional[str]:
+        if profile not in {"tooluse_small_first", "filesystem_small_first", "client_meta_small_first", "documentation_small_first"}:
             return None
-        if self._is_client_meta_request(req):
-            return "client_meta_request_prefer_small"
-        if self._is_lightweight_tool_scaffold_request(req, is_coding):
-            return "lightweight_tool_scaffold_prefer_small"
-        if not is_coding and LIGHTWEIGHT_TASK_RE.match(latest):
-            return "lightweight_greeting_prefer_small"
+        if self._is_repo_wide_or_architecture_request(req):
+            return "small_first_blocked_repo_wide"
+        if self._is_safety_critical_request(req):
+            return "small_first_blocked_safety"
+        if self._is_deep_reasoning_request(req):
+            return "small_first_blocked_deep_required"
+        if req.routing_input_tokens > cfg.routing.heuristics.small_first_input_hard_limit:
+            return "small_first_blocked_input_limit"
+        if routing_budget > small_context_limit:
+            return "small_first_blocked_context_limit"
         return None
 
     @staticmethod
-    def _apply_routing_budget(cfg: RouterConfig, req: UnifiedRequest, is_coding: bool) -> None:
+    def _is_filesystem_small_request(req: UnifiedRequest) -> bool:
+        text = RouterService._request_routing_text(req)
+        if not text:
+            return False
+        if req.needs_vision or req.tool_loop_context:
+            return False
+        if req.routing_estimated_total_tokens > 65000:
+            return False
+        if FILESYSTEM_REPO_WIDE_RE.search(text):
+            return False
+        if ARCHITECTURE_TASK_RE.search(text) or DEEP_REASONING_RE.search(text):
+            return False
+        if FILESYSTEM_SAFETY_CRITICAL_RE.search(text):
+            return False
+
+        file_refs = FILESYSTEM_FILE_REF_RE.findall(text)
+        file_count = len({str(ref).strip(" `\t\r\n'\"()") for ref in file_refs if str(ref).strip()})
+        if file_count > 2:
+            return False
+
+        if FILESYSTEM_SMALL_OPERATION_RE.search(text):
+            return True
+        if req.needs_tooluse and FILE_SEARCH_RE.search(text):
+            return True
+        return bool(file_count and FILE_SEARCH_RE.search(text))
+
+    @staticmethod
+    def _apply_routing_budget(cfg: RouterConfig, req: UnifiedRequest, is_coding: bool, profile: Optional[str] = None) -> None:
         if req.routing_max_tokens_budget is not None:
             return
         if RouterService._is_lightweight_anthropic_request(cfg, req, is_coding):
             req.routing_max_tokens_budget = cfg.routing.heuristics.lightweight_max_tokens_cap
+            return
+        if profile in {"tooluse_small_first", "filesystem_small_first", "client_meta_small_first", "documentation_small_first"}:
+            req.routing_max_tokens_budget = min(req.max_tokens or 0, cfg.routing.heuristics.small_first_output_cap)
 
     @staticmethod
     def _expected_route_class(req: UnifiedRequest, is_coding: bool) -> str:
@@ -2772,6 +2880,8 @@ class RouterService:
         is_lightweight = (
             self._is_lightweight_anthropic_request(cfg, req, is_coding)
             or self._is_lightweight_tool_scaffold_request(req, is_coding)
+            or self._is_filesystem_small_request(req)
+            or req.needs_tooluse
         )
         for alias, profile in cfg.models.items():
             if not profile.enabled:
@@ -2846,6 +2956,9 @@ class RouterService:
         
         if not text:
             return "simple"
+
+        if RouterService._is_local_documentation_request(req):
+            return "simple"  # Lokale Doku-/Kommentaraufgaben sollen low-latency bleiben.
             
         if DEBUG_TASK_RE.search(text):
             return "debug"
@@ -2857,9 +2970,6 @@ class RouterService:
             return "complex_code"
         if is_coding:
             return "code"
-        if BOILERPLATE_TASK_RE.search(text):
-            return "simple"  # Boilerplate/Formatting gilt als simple laut Anforderung
-        
         return "simple"
 
     @staticmethod
@@ -3171,7 +3281,8 @@ class RouterService:
     async def choose_route(self, cfg: RouterConfig, req: UnifiedRequest) -> RouteDecision:
         is_coding = self._is_coding_request(req)
         task_type = self._classify_task_type(req, is_coding)
-        self._apply_routing_budget(cfg, req, is_coding)
+        profile = self._routing_profile(cfg, req, is_coding)
+        self._apply_routing_budget(cfg, req, is_coding, profile)
         candidates = self._eligible_aliases(cfg, req)
         is_commit_task = req.is_commit_message_task
         is_no_thinking_task = self._is_no_thinking_task(req)
@@ -3204,7 +3315,7 @@ class RouterService:
                     )
 
         is_first_request = not recent_entries
-        total_tokens = req.routing_estimated_total_tokens
+        total_tokens = self._routing_budget_tokens(cfg, req, profile)
 
         if not candidates:
             if not self._has_available_primary_alias(cfg) and cfg.is_alias_enabled("backup"):
@@ -3230,38 +3341,53 @@ class RouterService:
         # 2. Model selection logic
         selected = "small"
         reason = "default_gemma"
-        shortcut_reason = self._prefer_small_shortcut(cfg, req, is_coding)
-        if shortcut_reason and "small" in candidates:
+        small_profile = cfg.models.get("small")
+        small_context_limit = small_profile.context_window if small_profile is not None else cfg.routing.heuristics.gemma_safe_limit
+        small_first_reason = self._small_first_reason(profile)
+        small_first_block_reason = self._small_first_block_reason(cfg, req, profile, total_tokens, small_context_limit)
+        if small_first_reason and "small" in candidates and small_first_block_reason is None:
             selected = "small"
-            reason = shortcut_reason
-        
+            reason = small_first_reason
+
         # Policy rules
-        if reason == "default_gemma" and total_tokens > cfg.routing.heuristics.qwen_safe_limit:
+        if small_first_block_reason is not None:
+            reason = small_first_block_reason
+        if reason in {"default_gemma", small_first_block_reason} and total_tokens > cfg.routing.heuristics.qwen_safe_limit:
             if "deep" in candidates:
                 selected = "deep"
                 reason = "context_exceeds_qwen_safe_limit"
             else:
                 logger.warning("route_eval_limit_exceeded total_tokens=%s limit=%s", total_tokens, cfg.routing.heuristics.qwen_safe_limit)
-                selected = "large" 
+                selected = "large"
                 reason = "context_exceeds_qwen_safe_limit_trying_large"
-        elif reason == "default_gemma" and total_tokens > cfg.routing.heuristics.gemma_safe_limit:
+        elif reason in {"default_gemma", "small_first_blocked_context_limit"} and total_tokens > small_context_limit:
             selected = "large"
-            reason = "context_exceeds_gemma_safe_limit"
-        elif reason == "default_gemma" and task_type in ("debug", "architecture", "complex_code", "agent"):
+            reason = "context_exceeds_small_context_window"
+        elif reason in {"default_gemma", "small_first_blocked_repo_wide", "small_first_blocked_deep_required"} and task_type == "architecture":
+            selected = "large"
+            reason = "complex_task_architecture"
+        elif reason in {"default_gemma", "small_first_blocked_safety"} and task_type in ("debug", "complex_code", "agent"):
+            selected = "large"
+            reason = f"complex_task_{task_type}"
+        elif reason == "default_gemma" and task_type in ("debug", "complex_code", "agent"):
             selected = "large"
             reason = f"complex_task_{task_type}"
         
         # 3. Validation and fallback within candidates
         if selected not in candidates:
+            original_selected = selected
             if "large" in candidates:
                 selected = "large"
-                reason = f"fallback_to_large_from_{selected}"
+                if reason.startswith("small_first_blocked_"):
+                    reason = "context_exceeds_small_context_window"
+                else:
+                    reason = f"fallback_to_large_from_{original_selected}"
             elif "small" in candidates:
                 selected = "small"
-                reason = f"fallback_to_small_from_{selected}"
+                reason = f"fallback_to_small_from_{original_selected}"
             elif "deep" in candidates:
                 selected = "deep"
-                reason = f"fallback_to_deep_from_{selected}"
+                reason = f"fallback_to_deep_from_{original_selected}"
             else:
                 selected = candidates[0]
                 reason = "fallback_to_first_available"

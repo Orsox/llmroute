@@ -21,6 +21,8 @@ from llmrouter.app import (
     normalize_anthropic_messages,
     normalize_openai_chat,
 )
+import llmrouter.protocols as protocols
+from llmrouter.protocols import _log_output_analytics
 from llmrouter.shared import _log_api_traffic, _log_local_llm_traffic
 from llmrouter.services import AnalyticsStore, ConfigStore
 
@@ -632,8 +634,98 @@ async def test_choose_route_prefers_small_for_light_openai_tool_scaffold_request
     decision = await service.choose_route(cfg, req)
 
     assert decision.selected_alias == "small"
-    assert decision.reason == "lightweight_tool_scaffold_prefer_small"
+    assert decision.reason == "tooluse_small_first"
     assert lm.last_judge_payload is None
+
+
+@pytest.mark.asyncio
+async def test_choose_route_prefers_small_for_general_tooluse_without_judge(cfg_file: Path) -> None:
+    lm = FakeLMClient()
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=lm)
+    cfg = service.config_store.get_config()
+    req = normalize_openai_chat(
+        {
+            "model": "borg-cpu",
+            "stream": True,
+            "tools": [{"type": "function", "function": {"name": "run_lookup", "parameters": {"type": "object"}}}],
+            "messages": [{"role": "user", "content": "Prüfe mit dem Tool die verfügbaren Daten und fasse das Ergebnis zusammen."}],
+        }
+    )
+
+    decision = await service.choose_route(cfg, req)
+
+    assert decision.selected_alias == "small"
+    assert decision.reason == "tooluse_small_first"
+    assert lm.last_judge_payload is None
+
+
+@pytest.mark.asyncio
+async def test_choose_route_prefers_small_up_to_configured_small_context_window(cfg_file: Path) -> None:
+    _write_config(cfg_file, small_context=128000)
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=FakeLMClient())
+    cfg = service.config_store.get_config()
+    req = UnifiedRequest(
+        source_api="openai_chat",
+        requested_model=None,
+        stream=False,
+        max_tokens=1000,
+        prompt_text="x" * 260000,
+        estimated_input_tokens=70000,
+        needs_vision=False,
+        needs_tooluse=False,
+        required_base_capability="chat",
+    )
+
+    decision: RouteDecision = await service.choose_route(cfg, req)
+
+    assert decision.selected_alias == "small"
+    assert decision.reason == "default_gemma"
+
+
+@pytest.mark.asyncio
+async def test_log_output_analytics_includes_estimated_vs_real_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    decision = RouteDecision(
+        request_id="req-token-test",
+        session_id="",
+        selected_alias="small",
+        reason="tooluse_small_first",
+        candidate_aliases=["small"],
+        prompt_text="hello",
+        user_prompt_text="hello",
+        latest_user_prompt_text="hello",
+        full_input_tokens=120,
+        full_estimated_total_tokens=150,
+        routing_input_tokens=120,
+        routing_estimated_total_tokens=150,
+        required_capabilities=["chat"],
+        expected_route_class="small",
+    )
+
+    written: list[dict[str, object]] = []
+
+    class CaptureAnalyticsStore:
+        def write_output(self, payload: dict[str, object]) -> None:
+            written.append(payload)
+
+    monkeypatch.setattr(protocols, "_analytics_store", CaptureAnalyticsStore())
+    _log_output_analytics(
+        "openai_chat",
+        decision,
+        "small",
+        "google/gemma-4-e4b",
+        False,
+        False,
+        "ok",
+        output_tokens=20,
+        input_tokens=100,
+    )
+
+    assert written
+    payload = written[0]
+    assert payload["estimated_total_tokens"] == 150
+    assert payload["real_total_tokens"] == 120
+    assert payload["estimation_delta_tokens"] == 30
+    assert payload["estimation_ratio"] == 1.25
 
 
 @pytest.mark.asyncio
@@ -662,6 +754,158 @@ async def test_choose_route_prefers_small_for_client_meta_request_without_judge(
     assert decision.selected_alias == "small"
     assert decision.reason == "client_meta_request_prefer_small"
     assert lm.last_judge_payload is None
+
+
+@pytest.mark.asyncio
+async def test_choose_route_prefers_small_for_filesystem_read_access_without_judge(cfg_file: Path) -> None:
+    lm = FakeLMClient()
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=lm)
+    cfg = service.config_store.get_config()
+    req = normalize_openai_chat(
+        {
+            "model": "borg-cpu",
+            "stream": True,
+            "tools": [{"type": "function", "function": {"name": "read_file", "parameters": {"type": "object"}}}],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "read_file llmrouter/services.py und erkläre die Funktion choose_route.",
+                }
+            ],
+        }
+    )
+
+    decision = await service.choose_route(cfg, req)
+
+    assert decision.selected_alias == "small"
+    assert decision.reason == "filesystem_small_first"
+    assert lm.last_judge_payload is None
+
+
+@pytest.mark.asyncio
+async def test_choose_route_escalates_repo_wide_filesystem_architecture_task(cfg_file: Path) -> None:
+    lm = FakeLMClient()
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=lm)
+    cfg = service.config_store.get_config()
+    req = normalize_openai_chat(
+        {
+            "model": "borg-cpu",
+            "stream": True,
+            "tools": [{"type": "function", "function": {"name": "grep", "parameters": {"type": "object"}}}],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "grep repo-wide in der gesamten Codebase und bewerte die Architektur des Routing-Designs.",
+                }
+            ],
+        }
+    )
+
+    decision = await service.choose_route(cfg, req)
+
+    assert decision.selected_alias == "large"
+    assert decision.reason in {"complex_task_architecture", "context_exceeds_small_context_window"}
+
+
+@pytest.mark.asyncio
+async def test_choose_route_caps_tooluse_budget_for_small_first(cfg_file: Path) -> None:
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=FakeLMClient())
+    cfg = service.config_store.get_config()
+    req = normalize_openai_chat(
+        {
+            "model": "borg-cpu",
+            "stream": True,
+            "max_tokens": 128000,
+            "tools": [{"type": "function", "function": {"name": "run_lookup", "parameters": {"type": "object"}}}],
+            "messages": [{"role": "user", "content": "Nutze das Tool und gib mir kurz die verfügbaren Datensätze zurück."}],
+        }
+    )
+
+    decision = await service.choose_route(cfg, req)
+
+    assert decision.selected_alias == "small"
+    assert decision.reason == "tooluse_small_first"
+    assert decision.routing_max_tokens_budget == 2048
+    assert decision.routing_estimated_total_tokens == req.routing_input_tokens + 2048
+
+
+@pytest.mark.asyncio
+async def test_choose_route_blocks_tooluse_small_first_when_input_limit_is_exceeded(cfg_file: Path) -> None:
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=FakeLMClient())
+    cfg = service.config_store.get_config()
+    req = UnifiedRequest(
+        source_api="openai_chat",
+        requested_model="borg-cpu",
+        stream=False,
+        max_tokens=128000,
+        prompt_text="Bitte nutze das Tool und analysiere diesen Kontext." + ("x" * 220000),
+        user_prompt_text="Bitte nutze das Tool und analysiere diesen Kontext." + ("x" * 220000),
+        latest_user_prompt_text="Bitte nutze das Tool und analysiere diesen Kontext." + ("x" * 220000),
+        estimated_input_tokens=50001,
+        needs_vision=False,
+        needs_tooluse=True,
+        required_base_capability="chat",
+    )
+
+    decision = await service.choose_route(cfg, req)
+
+    assert decision.selected_alias == "large"
+    assert decision.reason == "context_exceeds_small_context_window"
+
+
+@pytest.mark.asyncio
+async def test_choose_route_prefers_small_for_local_document_code_request(cfg_file: Path) -> None:
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=FakeLMClient())
+    cfg = service.config_store.get_config()
+    req = normalize_openai_chat(
+        {
+            "model": "borg-cpu",
+            "stream": True,
+            "max_tokens": 64000,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Write documentation for given method in doxygen format. "
+                        "Document only this function, include @param and @return, no example code.\n\n"
+                        "int add(int a, int b) { return a + b; }"
+                    ),
+                }
+            ],
+        }
+    )
+
+    decision = await service.choose_route(cfg, req)
+
+    assert decision.selected_alias == "small"
+    assert decision.reason == "documentation_small_first"
+    assert decision.routing_max_tokens_budget == 2048
+
+
+@pytest.mark.asyncio
+async def test_choose_route_keeps_repo_wide_documentation_on_large(cfg_file: Path) -> None:
+    service = RouterService(config_store=create_app(config_path=cfg_file).state.config_store, lm_client=FakeLMClient())
+    cfg = service.config_store.get_config()
+    req = normalize_openai_chat(
+        {
+            "model": "borg-cpu",
+            "stream": True,
+            "max_tokens": 64000,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Write doxygen documentation for the entire codebase and evaluate the architecture of the routing design."
+                    ),
+                }
+            ],
+        }
+    )
+
+    decision = await service.choose_route(cfg, req)
+
+    assert decision.selected_alias == "large"
+    assert decision.reason in {"complex_task_architecture", "context_exceeds_small_context_window"}
 
 
 @pytest.mark.asyncio

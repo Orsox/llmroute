@@ -778,6 +778,17 @@ def _log_output_analytics(
         used_fallback=used_fallback,
         stop_reason=stop_reason,
     )
+    real_total_tokens = None
+    if input_tokens is not None or output_tokens is not None:
+        real_total_tokens = int(input_tokens or 0) + int(output_tokens or 0)
+    estimated_total_tokens = decision.full_estimated_total_tokens
+    estimation_delta_tokens = None
+    estimation_ratio = None
+    if real_total_tokens is not None:
+        estimation_delta_tokens = estimated_total_tokens - real_total_tokens
+        if real_total_tokens > 0:
+            estimation_ratio = round(estimated_total_tokens / real_total_tokens, 4)
+
     payload: dict[str, Any] = {
         "event": "output_analytics",
         "v": 1,
@@ -793,6 +804,13 @@ def _log_output_analytics(
         "stop_reason": stop_reason,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
+        "real_total_tokens": real_total_tokens,
+        "estimated_input_tokens": decision.full_input_tokens,
+        "estimated_total_tokens": estimated_total_tokens,
+        "routing_estimated_input_tokens": decision.routing_input_tokens,
+        "routing_estimated_total_tokens": decision.routing_estimated_total_tokens,
+        "estimation_delta_tokens": estimation_delta_tokens,
+        "estimation_ratio": estimation_ratio,
         "tool_calls": tool_calls,
         "output_text_chars": len(output_text or ""),
         "output_text_excerpt": _clip_for_log(output_text),
@@ -801,6 +819,21 @@ def _log_output_analytics(
         "latency_ms": _current_request_latency_ms(),
     }
     logger.info("output_analytics %s", json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True))
+    logger.info(
+        "token_estimation_analytics request_id=%s source=%s selected_alias=%s estimated_input_tokens=%s "
+        "estimated_total_tokens=%s real_input_tokens=%s real_output_tokens=%s real_total_tokens=%s "
+        "delta_tokens=%s estimation_ratio=%s",
+        decision.request_id,
+        source_api,
+        final_alias,
+        decision.full_input_tokens,
+        estimated_total_tokens,
+        input_tokens,
+        output_tokens,
+        real_total_tokens,
+        estimation_delta_tokens,
+        estimation_ratio,
+    )
     if _analytics_store is not None:
         _analytics_store.write_output(payload)
 
