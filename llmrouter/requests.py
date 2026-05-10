@@ -111,6 +111,8 @@ def normalize_openai_chat(payload: dict[str, Any], *, session_id: str = "") -> U
         or COMMIT_MESSAGE_TASK_RE.search(prompt_text or "")
     )
     stream = bool(payload.get("stream"))
+    if is_commit_task:
+        stream = False
 
     return UnifiedRequest(
         source_api="openai_chat",

@@ -687,11 +687,21 @@ def _admin_status_html(cfg: RouterConfig) -> str:
       font-size: 12px;
       background: #1d4ed8;
     }
+    .section-title {
+      margin: 18px 0 8px;
+      font-size: 16px;
+    }
     .box .subvalue {
       margin-top: 4px;
       font-size: 12px;
       color: var(--muted);
       word-break: break-word;
+    }
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
     }
     table {
       width: 100%;
@@ -754,6 +764,69 @@ def _admin_status_html(cfg: RouterConfig) -> str:
         <div class="value" id="catalogPath">-</div>
       </div>
     </div>
+    <h2 class="section-title">Token-Nutzung</h2>
+    <div class="summary">
+      <div class="box">
+        <div class="label">Anfragen gesamt</div>
+        <div class="value" id="usageRequests">-</div>
+      </div>
+      <div class="box">
+        <div class="label">Input-Tokens gesamt</div>
+        <div class="value" id="usageInputTokens">-</div>
+      </div>
+      <div class="box">
+        <div class="label">Output-Tokens gesamt</div>
+        <div class="value" id="usageOutputTokens">-</div>
+      </div>
+      <div class="box">
+        <div class="label">Tokens gesamt</div>
+        <div class="value" id="usageTotalTokens">-</div>
+      </div>
+    </div>
+    <div class="analytics-grid">
+      <div class="box">
+        <div class="label">Tagesdaten</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Tag</th>
+              <th>Req</th>
+              <th>Input</th>
+              <th>Output</th>
+            </tr>
+          </thead>
+          <tbody id="dailyUsageRows"></tbody>
+        </table>
+      </div>
+      <div class="box">
+        <div class="label">Monatsdaten</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Monat</th>
+              <th>Req</th>
+              <th>Input</th>
+              <th>Output</th>
+            </tr>
+          </thead>
+          <tbody id="monthlyUsageRows"></tbody>
+        </table>
+      </div>
+      <div class="box">
+        <div class="label">Jahresdaten</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Jahr</th>
+              <th>Req</th>
+              <th>Input</th>
+              <th>Output</th>
+            </tr>
+          </thead>
+          <tbody id="yearlyUsageRows"></tbody>
+        </table>
+      </div>
+    </div>
     <div class="row muted" id="errorText"></div>
     <table>
       <thead>
@@ -793,6 +866,25 @@ def _admin_status_html(cfg: RouterConfig) -> str:
       if (value === false) return '<span class="pill bad">Nein</span>';
       return '<span class="pill warn">Unklar</span>';
     }
+    function formatNumber(value) {
+      const num = Number(value || 0);
+      return new Intl.NumberFormat().format(num);
+    }
+    function renderUsageRows(targetId, rows, emptyLabel) {
+      const target = document.getElementById(targetId);
+      if (!Array.isArray(rows) || !rows.length) {
+        target.innerHTML = '<tr><td colspan="4" class="muted">' + emptyLabel + '</td></tr>';
+        return;
+      }
+      target.innerHTML = rows.map((row) => {
+        return "<tr>"
+          + "<td>" + (row.period || "-") + "</td>"
+          + "<td>" + formatNumber(row.requests) + "</td>"
+          + "<td>" + formatNumber(row.input_tokens) + "</td>"
+          + "<td>" + formatNumber(row.output_tokens) + "</td>"
+          + "</tr>";
+      }).join("");
+    }
     async function copyRouterAddress() {
       const value = document.getElementById("routerEndpointLink").href;
       const status = document.getElementById("copyStatus");
@@ -809,14 +901,16 @@ def _admin_status_html(cfg: RouterConfig) -> str:
       const errorText = document.getElementById("errorText");
       const modelRows = document.getElementById("modelRows");
       try {
-        const [healthRes, modelRes] = await Promise.all([
+        const [healthRes, modelRes, usageRes] = await Promise.all([
           fetch("/healthz", { headers: headers() }),
           fetch("/admin/model-availability", { headers: headers() }),
+          fetch("/admin/token-usage", { headers: headers() }),
         ]);
 
         const healthOk = healthRes.ok;
         const healthBody = healthOk ? await healthRes.json() : {};
         const modelBody = modelRes.ok ? await modelRes.json() : {};
+        const usageBody = usageRes.ok ? await usageRes.json() : {};
         const allAvailable = !!modelBody.all_available;
         const allLoaded = !!modelBody.all_loaded;
         const ok = healthOk && healthBody.status === "ok" && allAvailable && allLoaded;
@@ -831,6 +925,15 @@ def _admin_status_html(cfg: RouterConfig) -> str:
         document.getElementById("provider").textContent = modelBody.provider || "-";
         document.getElementById("baseUrl").textContent = modelBody.base_url || "-";
         document.getElementById("catalogPath").textContent = modelBody.catalog_path || "-";
+        const usageTotals = usageBody.totals || {};
+        document.getElementById("usageRequests").textContent = formatNumber(usageTotals.requests);
+        document.getElementById("usageInputTokens").textContent = formatNumber(usageTotals.input_tokens);
+        document.getElementById("usageOutputTokens").textContent = formatNumber(usageTotals.output_tokens);
+        document.getElementById("usageTotalTokens").textContent = formatNumber(usageTotals.total_tokens);
+        const usageDisabled = usageBody.enabled === false;
+        renderUsageRows("dailyUsageRows", usageBody.daily, usageDisabled ? "Analytics deaktiviert." : "Keine Tagesdaten.");
+        renderUsageRows("monthlyUsageRows", usageBody.monthly, usageDisabled ? "Analytics deaktiviert." : "Keine Monatsdaten.");
+        renderUsageRows("yearlyUsageRows", usageBody.yearly, usageDisabled ? "Analytics deaktiviert." : "Keine Jahresdaten.");
 
         if (modelBody.error) {
           errorText.textContent = "Letzter Fehler: " + modelBody.error;
@@ -861,6 +964,13 @@ def _admin_status_html(cfg: RouterConfig) -> str:
         overallBadge.textContent = "Fehler";
         overallText.textContent = "Status konnte nicht geladen werden.";
         errorText.textContent = String(err);
+        document.getElementById("usageRequests").textContent = "-";
+        document.getElementById("usageInputTokens").textContent = "-";
+        document.getElementById("usageOutputTokens").textContent = "-";
+        document.getElementById("usageTotalTokens").textContent = "-";
+        renderUsageRows("dailyUsageRows", [], "Keine Daten.");
+        renderUsageRows("monthlyUsageRows", [], "Keine Daten.");
+        renderUsageRows("yearlyUsageRows", [], "Keine Daten.");
         modelRows.innerHTML = '<tr><td colspan="6" class="muted">Keine Daten.</td></tr>';
       }
     }

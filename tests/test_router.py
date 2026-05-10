@@ -1191,34 +1191,28 @@ async def test_commit_message_reasoning_only_response_falls_back_to_large(cfg_fi
     assert body["choices"][0]["message"]["content"] == "response-from-qwen/qwen3-vl-8b"
 
 
-@pytest.mark.asyncio
-async def test_openai_commit_stream_retries_large_when_small_stream_is_semantically_empty(cfg_file: Path) -> None:
-    app = create_app(config_path=cfg_file, lm_client=EmptyAnthropicSmallThenLargeTextLMClient())
-    service = app.state.router_service
-    decision, alias, used_fallback, stream = await service.handle_openai_chat(
-        {
-            "messages": [
-                {"role": "system", "content": "Generate a concise git commit message from this diff."},
-                {"role": "user", "content": "[Diff]\n..."},
-                {"role": "user", "content": "[Message]\n"},
-            ],
-            "stream": True,
-        }
-    )
+def test_openai_commit_request_disables_upstream_stream_even_when_client_requested_stream(cfg_file: Path) -> None:
+    lm_client = CapturePayloadLMClient()
+    app = create_app(config_path=cfg_file, lm_client=lm_client)
+    client = TestClient(app)
+    payload = {
+        "model": "borg-cpu",
+        "stream": True,
+        "messages": [
+            {"role": "system", "content": "Generate a concise git commit message from this diff."},
+            {"role": "user", "content": "[Diff]\n..."},
+            {"role": "user", "content": "[Message]\n"},
+        ],
+    }
 
-    assert decision.is_commit_message_task is True
-    assert decision.stream is True
-    assert alias == "large"
-    assert used_fallback is True
+    resp = client.post("/v1/chat/completions", json=payload)
 
-    async def _collect_stream() -> str:
-        chunks: list[str] = []
-        async for chunk in stream:
-            chunks.append(chunk.decode("utf-8", errors="replace"))
-        return "".join(chunks)
-
-    body = await asyncio.wait_for(_collect_stream(), timeout=2.0)
-    assert "fallback works" in body
+    assert resp.status_code == 200
+    assert resp.json()["choices"][0]["message"]["content"] == "response-from-qwen/qwen3-vl-8b"
+    assert resp.headers["x-router-selected-model"] == "qwen/qwen3-vl-8b"
+    assert resp.headers["x-router-fallback"] == "0"
+    assert lm_client.last_payload is not None
+    assert lm_client.last_payload["stream"] is False
 
 
 def test_repeated_similar_requests_escalate_from_small_to_large(cfg_file: Path) -> None:
@@ -1499,10 +1493,157 @@ def test_admin_status_page_is_human_readable(cfg_file: Path) -> None:
     assert resp.status_code == 200
     assert "Router Status" in resp.text
     assert "/admin/model-availability" in resp.text
+    assert "/admin/token-usage" in resp.text
     assert "Lokaler Router" in resp.text
+    assert "Token-Nutzung" in resp.text
+    assert "Tagesdaten" in resp.text
+    assert "Monatsdaten" in resp.text
+    assert "Jahresdaten" in resp.text
     assert "127.0.0.1:12345" in resp.text
     assert 'href="http://127.0.0.1:12345"' in resp.text
     assert "Kopieren" in resp.text
+
+
+def test_admin_token_usage_endpoint_groups_daily_monthly_and_yearly_data(cfg_file: Path) -> None:
+    app = create_app(config_path=cfg_file, lm_client=FakeLMClient())
+    client = TestClient(app)
+    store = app.state.analytics_store
+    store.write_route(
+        {
+            "request_id": "schema-init",
+            "selected_alias": "small",
+            "selected_model": "qwen/qwen3-vl-8b",
+            "fallback_used": False,
+            "stream": False,
+        }
+    )
+
+    conn = sqlite3.connect(cfg_file.parent / "router_analytics.sqlite")
+    try:
+        conn.execute("DELETE FROM routing_runs")
+        conn.executemany(
+            """
+            INSERT INTO routing_runs (
+                request_id, created_at, updated_at, route_logged_at, output_logged_at,
+                source, selected_alias, selected_model, input_tokens, output_tokens
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "req-2026-05-10",
+                    "2026-05-10T08:00:00Z",
+                    "2026-05-10T08:00:00Z",
+                    "2026-05-10T08:00:00Z",
+                    "2026-05-10T08:00:01Z",
+                    "openai_chat",
+                    "small",
+                    "qwen/qwen3-vl-8b",
+                    100,
+                    40,
+                ),
+                (
+                    "req-2026-05-09",
+                    "2026-05-09T08:00:00Z",
+                    "2026-05-09T08:00:00Z",
+                    "2026-05-09T08:00:00Z",
+                    "2026-05-09T08:00:01Z",
+                    "openai_chat",
+                    "large",
+                    "qwen/qwen3.5-35b-a3b",
+                    80,
+                    20,
+                ),
+                (
+                    "req-2025-12-31",
+                    "2025-12-31T08:00:00Z",
+                    "2025-12-31T08:00:00Z",
+                    "2025-12-31T08:00:00Z",
+                    "2025-12-31T08:00:01Z",
+                    "anthropic_messages",
+                    "large",
+                    "qwen/qwen3.5-35b-a3b",
+                    50,
+                    10,
+                ),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    resp = client.get("/admin/token-usage")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["enabled"] is True
+    assert body["totals"] == {
+        "requests": 3,
+        "input_tokens": 230,
+        "output_tokens": 70,
+        "total_tokens": 300,
+    }
+    assert body["daily"][:3] == [
+        {
+            "period": "2026-05-10",
+            "requests": 1,
+            "input_tokens": 100,
+            "output_tokens": 40,
+            "total_tokens": 140,
+            "last_seen_at": "2026-05-10T08:00:01Z",
+        },
+        {
+            "period": "2026-05-09",
+            "requests": 1,
+            "input_tokens": 80,
+            "output_tokens": 20,
+            "total_tokens": 100,
+            "last_seen_at": "2026-05-09T08:00:01Z",
+        },
+        {
+            "period": "2025-12-31",
+            "requests": 1,
+            "input_tokens": 50,
+            "output_tokens": 10,
+            "total_tokens": 60,
+            "last_seen_at": "2025-12-31T08:00:01Z",
+        },
+    ]
+    assert body["monthly"][:2] == [
+        {
+            "period": "2026-05",
+            "requests": 2,
+            "input_tokens": 180,
+            "output_tokens": 60,
+            "total_tokens": 240,
+            "last_seen_at": "2026-05-10T08:00:01Z",
+        },
+        {
+            "period": "2025-12",
+            "requests": 1,
+            "input_tokens": 50,
+            "output_tokens": 10,
+            "total_tokens": 60,
+            "last_seen_at": "2025-12-31T08:00:01Z",
+        },
+    ]
+    assert body["yearly"][:2] == [
+        {
+            "period": "2026",
+            "requests": 2,
+            "input_tokens": 180,
+            "output_tokens": 60,
+            "total_tokens": 240,
+            "last_seen_at": "2026-05-10T08:00:01Z",
+        },
+        {
+            "period": "2025",
+            "requests": 1,
+            "input_tokens": 50,
+            "output_tokens": 10,
+            "total_tokens": 60,
+            "last_seen_at": "2025-12-31T08:00:01Z",
+        },
+    ]
 
 
 def test_issue_api_creates_and_lists_grouped_by_project(cfg_file: Path) -> None:

@@ -1918,6 +1918,93 @@ class AnalyticsStore:
             finally:
                 conn.close()
 
+    def token_usage_breakdown(self) -> dict[str, Any]:
+        empty = {
+            "enabled": self._enabled(),
+            "totals": {
+                "requests": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+            },
+            "daily": [],
+            "monthly": [],
+            "yearly": [],
+        }
+        if not empty["enabled"]:
+            return empty
+
+        def _rows_for_period(
+            conn: sqlite3.Connection,
+            *,
+            prefix_length: int,
+            limit: int,
+        ) -> list[dict[str, Any]]:
+            cursor = conn.execute(
+                f"""
+                SELECT
+                    substr(COALESCE(output_logged_at, route_logged_at, created_at), 1, {prefix_length}) AS period,
+                    COUNT(*) AS requests,
+                    COALESCE(SUM(COALESCE(input_tokens, 0)), 0) AS input_tokens,
+                    COALESCE(SUM(COALESCE(output_tokens, 0)), 0) AS output_tokens,
+                    MAX(COALESCE(output_logged_at, route_logged_at, created_at)) AS last_seen_at
+                FROM routing_runs
+                GROUP BY period
+                ORDER BY period DESC
+                LIMIT ?
+                """,
+                (max(1, int(limit)),),
+            )
+            columns = [col[0] for col in cursor.description or []]
+            rows: list[dict[str, Any]] = []
+            for raw_row in cursor.fetchall():
+                row = dict(zip(columns, raw_row))
+                input_tokens = int(row.get("input_tokens") or 0)
+                output_tokens = int(row.get("output_tokens") or 0)
+                rows.append(
+                    {
+                        **row,
+                        "requests": int(row.get("requests") or 0),
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": input_tokens + output_tokens,
+                    }
+                )
+            return rows
+
+        with self._lock:
+            conn = self._connect()
+            try:
+                totals_row = conn.execute(
+                    """
+                    SELECT
+                        COUNT(*) AS requests,
+                        COALESCE(SUM(COALESCE(input_tokens, 0)), 0) AS input_tokens,
+                        COALESCE(SUM(COALESCE(output_tokens, 0)), 0) AS output_tokens
+                    FROM routing_runs
+                    """
+                ).fetchone()
+                requests = int((totals_row or (0, 0, 0))[0] or 0)
+                input_tokens = int((totals_row or (0, 0, 0))[1] or 0)
+                output_tokens = int((totals_row or (0, 0, 0))[2] or 0)
+                return {
+                    "enabled": True,
+                    "totals": {
+                        "requests": requests,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "total_tokens": input_tokens + output_tokens,
+                    },
+                    "daily": _rows_for_period(conn, prefix_length=10, limit=14),
+                    "monthly": _rows_for_period(conn, prefix_length=7, limit=12),
+                    "yearly": _rows_for_period(conn, prefix_length=4, limit=5),
+                }
+            except sqlite3.Error as exc:
+                logger.warning("analytics_token_usage_breakdown_failed error=%s", exc)
+                return empty
+            finally:
+                conn.close()
+
 
 class RequestMemoryStore:
     def __init__(self, max_sessions: int = 128, max_entries_per_session: int = 32):

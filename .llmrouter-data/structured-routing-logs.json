@@ -1,0 +1,4748 @@
+[
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:40:07.088228Z",
+    "request_id": "chatcmpl-277bf7979b3f4cd3ab55eab5017be2e4",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 210,
+      "output_token_count": 284,
+      "total_token_count": 476
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 816,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:816 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:40:07.234630Z",
+    "request_id": "chatcmpl-274a81e3bbd94bc1a118d86bbfc73e29",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 131,
+      "output_token_count": 272,
+      "total_token_count": 436
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 498,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:498 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:40:11.865816Z",
+    "request_id": "chatcmpl-58ff18e5daa54759832cee4c99a3af33",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 131,
+      "output_token_count": 181,
+      "total_token_count": 345
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 498,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:498 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:40:12.032651Z",
+    "request_id": "chatcmpl-8fa91d845ff94978a0e07042413504de",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 210,
+      "output_token_count": 222,
+      "total_token_count": 414
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 816,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:816 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:40:18.573943Z",
+    "request_id": "chatcmpl-9a2e38e75d7d418dbd9cc47f598e7f19",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.646428571429,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.128571428571,
+          "final_score": 0.646428571429,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.458785520282,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.128571428571,
+          "final_score": 0.458785520282,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.646428571429,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 123,
+      "output_token_count": 263,
+      "total_token_count": 376
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 3,
+      "text_part_count": 3,
+      "image_part_count": 0,
+      "text_character_count": 410,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:410 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:52:06.127914Z",
+    "request_id": "chatcmpl-4bd602cf9c3e4b8f9cd0c2ec69d4091f",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:52:06.140415Z",
+    "request_id": "chatcmpl-ac7f63ec54ea44f397e2ad7aff288ded",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:03.237376Z",
+    "request_id": "chatcmpl-5f089f85ea93489da3a595bfc66d0727",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:03.249492Z",
+    "request_id": "chatcmpl-c8501e4f7f404559944ee63858daef9d",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:10.841602Z",
+    "request_id": "chatcmpl-ea8ede17bfc24029b939a83105e432ea",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:10.852501Z",
+    "request_id": "chatcmpl-2200c921165449e29b4f45c02cc8392f",
+    "selected_model": {
+      "model_id": "collective-tool-drone",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-tool-drone",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.667857142857,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.107142857143,
+          "final_score": 0.667857142857,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [
+      "tool-use"
+    ],
+    "routing_score": 0.667857142857,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 29,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 17,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:17 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:16.669081Z",
+    "request_id": "chatcmpl-86abf7dd321949849fa65445ca4c6b1d",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.725,
+        "score_breakdown": {
+          "positive_score": 0.875,
+          "overkill_penalty": 0.15,
+          "final_score": 0.725,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 1.0,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.2,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.725,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:16.681496Z",
+    "request_id": "chatcmpl-1ef9be39f217416ab4ba335766cbacc1",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:16.692911Z",
+    "request_id": "chatcmpl-8d7823d405ca49e5a2556305b8c38251",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": true
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": null,
+      "total_token_count": null
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": null,
+      "finish_reason": null
+    },
+    "error": {
+      "error_state": "protocol_error",
+      "error_kind": "protocol_error",
+      "retryable": false,
+      "status_code": 400,
+      "detail": "[redacted:24 chars]"
+    }
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:16.885405Z",
+    "request_id": "chatcmpl-91d45117daa245dd8e4979b30b873a66",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:16.896060Z",
+    "request_id": "chatcmpl-ce2b9630827a437fb8fb80256bc077f1",
+    "selected_model": {
+      "model_id": "collective-tool-drone",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-tool-drone",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.667857142857,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.107142857143,
+          "final_score": 0.667857142857,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [
+      "tool-use"
+    ],
+    "routing_score": 0.667857142857,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 29,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 17,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:17 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:16.906936Z",
+    "request_id": "chatcmpl-f1275f50ce044af4b075acbb4aee0214",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": true
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": null,
+      "total_token_count": null
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": null,
+      "finish_reason": null
+    },
+    "error": {
+      "error_state": "protocol_error",
+      "error_kind": "protocol_error",
+      "retryable": false,
+      "status_code": 400,
+      "detail": "[redacted:24 chars]"
+    }
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:16.917770Z",
+    "request_id": "chatcmpl-570bd75aeda747809913acb5ea272760",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:16.928049Z",
+    "request_id": "chatcmpl-df3003b9148948d9893741965571c413",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:53:17.201662Z",
+    "request_id": "chatcmpl-a673ffd9f78842e2b40413a173f8662d",
+    "selected_model": {
+      "model_id": "collective-tool-drone",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-tool-drone",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.667857142857,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.107142857143,
+          "final_score": 0.667857142857,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [
+      "tool-use"
+    ],
+    "routing_score": 0.667857142857,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 29,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 17,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:17 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:54:24.139325Z",
+    "request_id": "chatcmpl-4dbf422d1ccd408880f7a5c6e8fe6825",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 210,
+      "output_token_count": 342,
+      "total_token_count": 534
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 816,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:816 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:54:24.285045Z",
+    "request_id": "chatcmpl-98b9af5baed34a20a73bc8cf85065565",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 139,
+      "output_token_count": 187,
+      "total_token_count": 360
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 529,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:529 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:54:27.511729Z",
+    "request_id": "chatcmpl-18cce15acef54797adba4b5f34dbcc18",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 139,
+      "output_token_count": 320,
+      "total_token_count": 493
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 529,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:529 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:54:29.982732Z",
+    "request_id": "chatcmpl-3f96137936e041e6987be9ac2b7c369a",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 210,
+      "output_token_count": 444,
+      "total_token_count": 636
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 816,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:816 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T18:54:38.413085Z",
+    "request_id": "chatcmpl-89349b3e7ae845a1a0789e646eb6cd57",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.646428571429,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.128571428571,
+          "final_score": 0.646428571429,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.458785520282,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.128571428571,
+          "final_score": 0.458785520282,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.646428571429,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 123,
+      "output_token_count": 337,
+      "total_token_count": 450
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 3,
+      "text_part_count": 3,
+      "image_part_count": 0,
+      "text_character_count": 410,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:410 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:00:09.843653Z",
+    "request_id": "chatcmpl-258c42af410241be8a6c60d07f965dbe",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015622,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 373,
+      "total_token_count": 388
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:01:27.346332Z",
+    "request_id": "chatcmpl-4c527a4403c1448f87f48b1255efcb34",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015622,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 353,
+      "total_token_count": 368
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:04:24.012544Z",
+    "request_id": "chatcmpl-6799f35836e14b5aba5d759f8f50b766",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.725,
+        "score_breakdown": {
+          "positive_score": 0.875,
+          "overkill_penalty": 0.15,
+          "final_score": 0.725,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 1.0,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.2,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.725,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:04:24.025272Z",
+    "request_id": "chatcmpl-d579cacaea014a39b5c090b9f2d52026",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:04:24.036400Z",
+    "request_id": "chatcmpl-b4fb1a6069144c20a415acbf2fe9300f",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": true
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": null,
+      "total_token_count": null
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": null,
+      "finish_reason": null
+    },
+    "error": {
+      "error_state": "protocol_error",
+      "error_kind": "protocol_error",
+      "retryable": false,
+      "status_code": 400,
+      "detail": "[redacted:24 chars]"
+    }
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:04:24.234506Z",
+    "request_id": "chatcmpl-b9b61440465c4316ad82b6a298eb61d1",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:04:24.246298Z",
+    "request_id": "chatcmpl-b46e92a6bc624125a65ffac51c06856b",
+    "selected_model": {
+      "model_id": "collective-tool-drone",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-tool-drone",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.667857142857,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.107142857143,
+          "final_score": 0.667857142857,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [
+      "tool-use"
+    ],
+    "routing_score": 0.667857142857,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 29,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 17,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:17 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:04:24.257492Z",
+    "request_id": "chatcmpl-51c646fdc10a484795e3daf449e2844a",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": true
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": null,
+      "total_token_count": null
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": null,
+      "finish_reason": null
+    },
+    "error": {
+      "error_state": "protocol_error",
+      "error_kind": "protocol_error",
+      "retryable": false,
+      "status_code": 400,
+      "detail": "[redacted:24 chars]"
+    }
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:04:24.268867Z",
+    "request_id": "chatcmpl-db71ed4b56c54d519a9fad274a2d34cd",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:04:24.278863Z",
+    "request_id": "chatcmpl-47ae9d23b4d543258506597eceac7a08",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:04:24.569300Z",
+    "request_id": "chatcmpl-1043138796194cbf8d3c1bd95449dbdf",
+    "selected_model": {
+      "model_id": "collective-tool-drone",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-tool-drone",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.667857142857,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.107142857143,
+          "final_score": 0.667857142857,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [
+      "tool-use"
+    ],
+    "routing_score": 0.667857142857,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 29,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 17,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:17 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:05:38.431683Z",
+    "request_id": "chatcmpl-2d7dd1357f31420cbcfca3e0c9ca123b",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 210,
+      "output_token_count": 867,
+      "total_token_count": 1059
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 816,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:816 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:05:38.575882Z",
+    "request_id": "chatcmpl-854b3a109ea74a698907ba24124fc7cf",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 139,
+      "output_token_count": 480,
+      "total_token_count": 653
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 529,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:529 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:05:46.180443Z",
+    "request_id": "chatcmpl-c9cc1d4f51d245c39f7a68e28bdc54a6",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 139,
+      "output_token_count": 233,
+      "total_token_count": 406
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 529,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:529 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:05:51.723718Z",
+    "request_id": "chatcmpl-7bb0be9ce18d41ccbe5437df26b3f8a5",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 210,
+      "output_token_count": 351,
+      "total_token_count": 543
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 816,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:816 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:05:56.154188Z",
+    "request_id": "chatcmpl-a1e034161c264bf0abc4a489916293a2",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 138,
+      "output_token_count": 234,
+      "total_token_count": 389
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 526,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:526 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:05:56.294761Z",
+    "request_id": "chatcmpl-83050da2419643dab74227a89b10f427",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.437356948853,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.15,
+          "final_score": 0.437356948853,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 140,
+      "output_token_count": 127,
+      "total_token_count": 273
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 534,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:534 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:06:01.408741Z",
+    "request_id": "chatcmpl-d845195ea1c2428990391d5f7c531c8b",
+    "selected_model": {
+      "model_id": "google/gemma-4-e4b",
+      "backend_id": "lmstudio-local"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "google/gemma-4-e4b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.646428571429,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.128571428571,
+          "final_score": 0.646428571429,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      },
+      {
+        "rank": 2,
+        "model": {
+          "model_id": "qwen/qwen3.6-27b",
+          "backend_id": "lmstudio-local"
+        },
+        "routing_score": 0.458785520282,
+        "score_breakdown": {
+          "positive_score": 0.587356948853,
+          "overkill_penalty": 0.128571428571,
+          "final_score": 0.458785520282,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 0.24942779541015625,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.062356948853,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.646428571429,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 123,
+      "output_token_count": 263,
+      "total_token_count": 376
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 3,
+      "text_part_count": 3,
+      "image_part_count": 0,
+      "text_character_count": 410,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:410 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 0.0,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:14.293750Z",
+    "request_id": "chatcmpl-104aad031ecb4397a6c78cd04fc07f29",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.725,
+        "score_breakdown": {
+          "positive_score": 0.875,
+          "overkill_penalty": 0.15,
+          "final_score": 0.725,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 1.0,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.2,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.725,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:14.307103Z",
+    "request_id": "chatcmpl-e229923783ef4a11ae1ebd6875426210",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:14.318076Z",
+    "request_id": "chatcmpl-48825a69bd1f4aa197b03e540919aa83",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": true
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": null,
+      "total_token_count": null
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": null,
+      "finish_reason": null
+    },
+    "error": {
+      "error_state": "protocol_error",
+      "error_kind": "protocol_error",
+      "retryable": false,
+      "status_code": 400,
+      "detail": "[redacted:24 chars]"
+    }
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:14.513489Z",
+    "request_id": "chatcmpl-9cfd8d5ca38340ff97889c250d4c5a7f",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:14.526233Z",
+    "request_id": "chatcmpl-fc27781b5a29407faaf1bfb3d13c03c2",
+    "selected_model": {
+      "model_id": "collective-tool-drone",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-tool-drone",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.667857142857,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.107142857143,
+          "final_score": 0.667857142857,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [
+      "tool-use"
+    ],
+    "routing_score": 0.667857142857,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 29,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 17,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:17 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:14.545766Z",
+    "request_id": "chatcmpl-ad25e7dd334e46aa8a87d35c87ec0a84",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": true
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": null,
+      "total_token_count": null
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": null,
+      "finish_reason": null
+    },
+    "error": {
+      "error_state": "protocol_error",
+      "error_kind": "protocol_error",
+      "retryable": false,
+      "status_code": 400,
+      "detail": "[redacted:24 chars]"
+    }
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:14.557737Z",
+    "request_id": "chatcmpl-478e728af9de4db196d9a86a4b8fb3a5",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:14.569109Z",
+    "request_id": "chatcmpl-5e6ec01b0e61418c8990c85873c241be",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:14.832393Z",
+    "request_id": "chatcmpl-456dfb063ceb469ca229e293b5c08323",
+    "selected_model": {
+      "model_id": "collective-tool-drone",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-tool-drone",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.667857142857,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.107142857143,
+          "final_score": 0.667857142857,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [
+      "tool-use"
+    ],
+    "routing_score": 0.667857142857,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 29,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 17,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:17 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:32.256746Z",
+    "request_id": "chatcmpl-3dc871b71fb647cdb5ed4a93f92822b7",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.725,
+        "score_breakdown": {
+          "positive_score": 0.875,
+          "overkill_penalty": 0.15,
+          "final_score": 0.725,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 1.0,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.2,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.725,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:32.269911Z",
+    "request_id": "chatcmpl-0cd1275a0eeb4d93a4db73e3dbceb777",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:32.281887Z",
+    "request_id": "chatcmpl-55355240f27842eb8e155fe11d0d7013",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": true
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": null,
+      "total_token_count": null
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": null,
+      "finish_reason": null
+    },
+    "error": {
+      "error_state": "protocol_error",
+      "error_kind": "protocol_error",
+      "retryable": false,
+      "status_code": 400,
+      "detail": "[redacted:24 chars]"
+    }
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:32.475217Z",
+    "request_id": "chatcmpl-16d50e3f095f4040bbfe1a52efa6bfb6",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:32.487274Z",
+    "request_id": "chatcmpl-279a653b83d645298eaa1e8545e07457",
+    "selected_model": {
+      "model_id": "collective-tool-drone",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-tool-drone",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.667857142857,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.107142857143,
+          "final_score": 0.667857142857,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [
+      "tool-use"
+    ],
+    "routing_score": 0.667857142857,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 29,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 17,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:17 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:32.510536Z",
+    "request_id": "chatcmpl-58802688f77940f9a7db2f8098d4b78b",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": true
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": null,
+      "total_token_count": null
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": null,
+      "finish_reason": null
+    },
+    "error": {
+      "error_state": "protocol_error",
+      "error_kind": "protocol_error",
+      "retryable": false,
+      "status_code": 400,
+      "detail": "[redacted:24 chars]"
+    }
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:32.522933Z",
+    "request_id": "chatcmpl-a9ae84e53fd84003a29927a3ddb40848",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:32.534359Z",
+    "request_id": "chatcmpl-0c02e565f9814a01b7215174e57ae519",
+    "selected_model": {
+      "model_id": "collective-generalist",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-generalist",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.625,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.15,
+          "final_score": 0.625,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [],
+    "routing_score": 0.625,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 8,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 6,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:6 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  },
+  {
+    "schema_version": "wt-040-v1",
+    "record_type": "routing-decision",
+    "timestamp": "2026-04-26T19:11:32.818335Z",
+    "request_id": "chatcmpl-024a696444b64e8598975ce9df87e7c5",
+    "selected_model": {
+      "model_id": "collective-tool-drone",
+      "backend_id": "node-0"
+    },
+    "candidate_models": [
+      {
+        "rank": 1,
+        "model": {
+          "model_id": "collective-tool-drone",
+          "backend_id": "node-0"
+        },
+        "routing_score": 0.667857142857,
+        "score_breakdown": {
+          "positive_score": 0.775,
+          "overkill_penalty": 0.107142857143,
+          "final_score": 0.667857142857,
+          "capability_fit_score": 1.0,
+          "context_fit_score": 1.0,
+          "latency_score": 0.5,
+          "load_score": 0.5,
+          "historical_score": 0.5,
+          "capability_fit_contribution": 0.3,
+          "context_fit_contribution": 0.25,
+          "latency_contribution": 0.1,
+          "load_contribution": 0.075,
+          "historical_contribution": 0.05,
+          "capability_fit_weight": 0.3,
+          "context_fit_weight": 0.25,
+          "latency_weight": 0.2,
+          "load_weight": 0.15,
+          "historical_weight": 0.1
+        }
+      }
+    ],
+    "rejected_models": [],
+    "required_capabilities": [
+      "tool-use"
+    ],
+    "routing_score": 0.667857142857,
+    "fallback": {
+      "fallback_used": false,
+      "fallback_path": [],
+      "fallback_exhausted": false
+    },
+    "token_usage": {
+      "input_token_estimate": 29,
+      "output_token_count": 3,
+      "total_token_count": 10
+    },
+    "prompt_diagnostics": {
+      "logging_mode": "redacted",
+      "redaction_applied": true,
+      "message_count": 1,
+      "text_part_count": 1,
+      "image_part_count": 0,
+      "text_character_count": 17,
+      "metadata_keys": [],
+      "prompt_excerpt": "[redacted:17 chars]"
+    },
+    "backend_outcome": {
+      "backend_latency_ms": 12.5,
+      "finish_reason": "stop"
+    },
+    "error": null
+  }
+]

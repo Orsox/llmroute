@@ -338,6 +338,11 @@ def create_app(
         await require_auth(request)
         return _admin_status_html(store.get_config())
 
+    @app_instance.get('/admin/token-usage')
+    async def admin_token_usage(request: Request) -> JSONResponse:
+        await require_auth(request)
+        return JSONResponse(analytics_store.token_usage_breakdown())
+
     @app_instance.get('/admin/config')
     async def admin_get_config(request: Request) -> PlainTextResponse:
         await require_auth(request)
